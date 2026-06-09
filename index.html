@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Chess</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main>
+    <section class="board-col">
+      <div class="player-bar">
+        <span class="p-name" id="name-top"></span>
+        <span class="captured" id="cap-top"></span>
+        <span class="clock" id="clock-top"></span>
+      </div>
+      <div id="board-wrap">
+        <div id="board"></div>
+        <div id="promo" hidden>
+          <div id="promo-box"></div>
+        </div>
+        <div id="gameover" hidden>
+          <div class="go-card">
+            <h2 id="go-title"></h2>
+            <p id="go-sub"></p>
+            <div class="go-actions">
+              <button id="go-new" class="btn primary">New Game</button>
+              <button id="go-close" class="btn">View Board</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="player-bar">
+        <span class="p-name" id="name-bottom"></span>
+        <span class="captured" id="cap-bottom"></span>
+        <span class="clock" id="clock-bottom"></span>
+      </div>
+    </section>
+
+    <aside class="panel">
+      <h1>Play Chess</h1>
+      <div class="controls">
+        <label>Mode
+          <select id="mode">
+            <option value="two">Two players</option>
+            <option value="ai">vs Computer</option>
+          </select>
+        </label>
+        <label>Time
+          <select id="time">
+            <option value="0">No clock</option>
+            <option value="1">1 min</option>
+            <option value="3">3 min</option>
+            <option value="5">5 min</option>
+            <option value="10" selected>10 min</option>
+            <option value="30">30 min</option>
+          </select>
+        </label>
+        <label id="playas-wrap" hidden>Play as
+          <select id="playas">
+            <option value="w">White</option>
+            <option value="b">Black</option>
+          </select>
+        </label>
+        <label id="diff-wrap" hidden>Difficulty
+          <select id="diff">
+            <option value="1">Easy</option>
+            <option value="2" selected>Medium</option>
+            <option value="3">Hard</option>
+          </select>
+        </label>
+      </div>
+      <div id="status"></div>
+      <div id="moves"></div>
+      <div class="actions">
+        <button id="new" class="btn primary">New Game</button>
+        <button id="flip" class="btn">Flip</button>
+        <button id="undo" class="btn">Undo</button>
+      </div>
+    </aside>
+  </main>
+
+  <script src="chess-engine.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
