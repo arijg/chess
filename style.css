@@ -90,9 +90,51 @@ main {
   color: #d33a2c;
 }
 
+.board-row {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+
+#evalbar {
+  position: relative;
+  width: 26px;
+  border-radius: 4px;
+  overflow: hidden;
+  background: #403d39; /* black's share of the bar */
+  box-shadow: 0 4px 18px rgba(0, 0, 0, .4);
+}
+
+#eval-white {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 50%;
+  background: #f0f0f0;
+  transition: height .5s ease;
+}
+
+#evalbar.flipped #eval-white {
+  bottom: auto;
+  top: 0;
+}
+
+#eval-label {
+  position: absolute;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-size: 9px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+
 #board-wrap {
   position: relative;
-  width: 100%;
+  flex: 1;
+  min-width: 0;
   aspect-ratio: 1;
 }
 
