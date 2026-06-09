@@ -404,9 +404,17 @@
     const capB = capturedBy(bottom), capT = capturedBy(top);
     const pts = c => c.reduce((s, p) => s + VALUES[E.typeOf(p)], 0);
     const diff = pts(capB) - pts(capT);
-    const html = (pieces, adv) =>
-      pieces.map(p => GLYPHS[E.typeOf(p)]).join('')
-      + (adv > 0 ? '<span class="adv">+' + adv + '</span>' : '');
+    // Same piece types huddle together; a gap separates different types.
+    const html = (pieces, adv) => {
+      const groups = [];
+      for (const p of pieces) {
+        const t = E.typeOf(p);
+        if (groups.length && groups[groups.length - 1].t === t) groups[groups.length - 1].n++;
+        else groups.push({ t, n: 1 });
+      }
+      return groups.map(g => '<span class="cap-group">' + GLYPHS[g.t].repeat(g.n) + '</span>').join('')
+        + (adv > 0 ? '<span class="adv">+' + adv + '</span>' : '');
+    };
     $('cap-bottom').innerHTML = html(capB, diff);
     $('cap-top').innerHTML = html(capT, -diff);
   }

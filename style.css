@@ -40,7 +40,9 @@ main {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  width: min(640px, 94vw, calc(100vh - 150px));
+  /* 34px wider than the board itself (eval bar 26px + gap 8px),
+     so the board keeps the same size it had before the bar existed. */
+  width: min(674px, 94vw, calc(100vh - 116px));
 }
 
 .player-bar {
@@ -57,16 +59,18 @@ main {
 }
 
 .captured {
-  font-size: 17px;
-  letter-spacing: -3px;
+  font-size: 19px;
   color: #9e9d9b;
   line-height: 1;
 }
 
+.cap-group {
+  letter-spacing: -2px; /* slight huddle within a same-type group */
+  margin-right: 8px;
+}
+
 .captured .adv {
   font-size: 12px;
-  letter-spacing: 0;
-  margin-left: 6px;
   color: #9e9d9b;
 }
 
@@ -423,6 +427,6 @@ main {
 .btn.primary:hover { background: var(--green-hover); }
 
 @media (max-width: 1020px) {
-  .panel { width: min(640px, 94vw); max-height: none; }
+  .panel { width: min(674px, 94vw); max-height: none; }
   #moves { max-height: 200px; }
 }
