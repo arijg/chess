@@ -432,7 +432,7 @@ main {
   display: flex;
   flex-direction: column;
   gap: 14px;
-  max-height: min(660px, calc(100vh - 48px));
+  max-height: calc(100vh - 48px);
 }
 
 .panel h1 {
@@ -532,6 +532,7 @@ main {
   border-radius: 6px;
   padding: 4px;
   cursor: pointer;
+  flex-shrink: 0;
 }
 
 #eval-graph svg {
@@ -543,7 +544,9 @@ main {
 #engine-lines {
   background: var(--panel-2);
   border-radius: 6px;
-  overflow: hidden;
+  overflow-y: auto;
+  flex-shrink: 0; /* never let the panel's height cap crush the lines */
+  max-height: 140px;
 }
 
 .line-row {
