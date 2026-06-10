@@ -476,9 +476,19 @@
     return pool[Math.floor(Math.random() * pool.length)].m;
   }
 
+  // Top n root moves with scores (centipawns, side to move's perspective).
+  function topMoves(state, depth, n) {
+    const moves = legalMoves(state);
+    const scored = orderMoves(state, moves).map(m => ({
+      m, score: -search(makeMove(state, m), depth - 1, -Infinity, Infinity),
+    }));
+    scored.sort((a, b) => b.score - a.score);
+    return scored.slice(0, n);
+  }
+
   const ChessEngine = {
     FILES, initialState, loadFEN, legalMoves, makeMove, inCheck, gameStatus,
-    san, fenKey, perft, bestMove, evaluatePosition, insufficientMaterial,
+    san, fenKey, perft, bestMove, topMoves, evaluatePosition, insufficientMaterial,
     forcesMate, mateMoves,
     sqToAlg, algToSq, colorOf, typeOf, findKing, attacked,
   };

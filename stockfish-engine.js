@@ -67,6 +67,7 @@
       worker.postMessage('setoption name UCI_LimitStrength value false');
       worker.postMessage('setoption name Skill Level value ' + (opts.skill != null ? opts.skill : 20));
     }
+    worker.postMessage('setoption name MultiPV value ' + (opts.multiPV || 1));
   }
 
   function go(position, opts) {
@@ -79,18 +80,22 @@
           ? 'startpos' + (position.moves.length ? ' moves ' + position.moves.join(' ') : '')
           : 'fen ' + position.fen));
         let score = null;
+        const lines = []; // latest info per MultiPV slot
         listeners.push(line => {
           if (line.startsWith('info ') && line.includes(' score ')) {
             const m = line.match(/score (cp|mate) (-?\d+)/);
             if (m) {
               const pv = line.match(/ pv (.+)$/);
-              score = { type: m[1], value: +m[2], pv: pv ? pv[1].split(' ') : [] };
+              const entry = { type: m[1], value: +m[2], pv: pv ? pv[1].split(' ') : [] };
+              const mpv = line.match(/ multipv (\d+)/);
+              lines[mpv ? +mpv[1] - 1 : 0] = entry;
+              score = lines[0] || entry;
             }
             return false;
           }
           if (line.startsWith('bestmove')) {
             const best = line.split(/\s+/)[1];
-            resolve({ best: !best || best === '(none)' ? null : best, score });
+            resolve({ best: !best || best === '(none)' ? null : best, score, lines: lines.filter(Boolean) });
             return true;
           }
           return false;
