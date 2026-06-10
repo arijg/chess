@@ -321,6 +321,32 @@
     return s;
   }
 
+  /* ---------------- Forced-mate solving (for puzzles) ----------------
+     Exact (not heuristic) detection of forced mates of the classic puzzle
+     shape: every attacking move gives check until the final mate. `plies`
+     counts total half-moves including the defender's (mate in 2 = 3 plies). */
+
+  // Does move `m` force mate within `plies` half-moves (m being the first)?
+  function forcesMate(state, m, plies) {
+    const next = makeMove(state, m);
+    const replies = legalMoves(next);
+    if (!replies.length) return inCheck(next); // checkmate yes, stalemate no
+    if (plies < 3 || !inCheck(next)) return false;
+    return replies.every(r => mateMoves(makeMove(next, r), plies - 2, true).length > 0);
+  }
+
+  // All moves that force mate within `plies` half-moves.
+  function mateMoves(state, plies, firstOnly) {
+    const out = [];
+    for (const m of legalMoves(state)) {
+      if (forcesMate(state, m, plies)) {
+        out.push(m);
+        if (firstOnly) break;
+      }
+    }
+    return out;
+  }
+
   function perft(state, depth) {
     if (depth === 0) return 1;
     let nodes = 0;
@@ -451,6 +477,7 @@
   const ChessEngine = {
     FILES, initialState, loadFEN, legalMoves, makeMove, inCheck, gameStatus,
     san, fenKey, perft, bestMove, evaluatePosition, insufficientMaterial,
+    forcesMate, mateMoves,
     sqToAlg, algToSq, colorOf, typeOf, findKing, attacked,
   };
 
