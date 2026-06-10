@@ -1,38 +1,42 @@
-/* test-puzzles.js — re-verifies every puzzle with the exact quiet-move solver.
+/* test-puzzles.js — re-verifies every Lichess-format puzzle: each move of
+   the solution line must be legal, lines must alternate from the FEN's side
+   to move, and mate-themed puzzles must end in checkmate.
    Run with: jsc chess-engine.js puzzles-data.js test-puzzles.js */
 (function () {
   'use strict';
   const E = typeof ChessEngine !== 'undefined' ? ChessEngine : require('./chess-engine.js');
   const out = typeof print !== 'undefined' ? print : console.log;
-  const uci = m => E.sqToAlg(m.from) + E.sqToAlg(m.to) + (m.promotion ? m.promotion.toLowerCase() : '');
+
+  function findUci(state, u) {
+    const from = E.algToSq(u.slice(0, 2));
+    const to = E.algToSq(u.slice(2, 4));
+    const promo = u[4] ? u[4].toUpperCase() : null;
+    return E.legalMoves(state).find(m => m.from === from && m.to === to && (m.promotion || null) === promo);
+  }
 
   let failed = 0;
-  const counts = {};
+  const buckets = {};
   for (const p of PUZZLES) {
-    counts[p.mateIn] = (counts[p.mateIn] || 0) + 1;
-    const st = E.loadFEN(p.fen);
-    const plies = p.mateIn * 2 - 1;
+    const b = p.rating < 950 ? '<950' : p.rating < 1700 ? '950-1700' : '1700+';
+    buckets[b] = (buckets[b] || 0) + 1;
     const problems = [];
-
-    const best = E.legalMoves(st).find(m => uci(m) === p.best);
-    if (!best) problems.push('stored best move is not legal');
-    else if (!E.forcesMate(st, best, plies, true)) problems.push('stored best move does not force mate');
-    // Uniqueness is checked for mate-in-2 only: the quiet-move solve at
-    // 5 plies is too slow to run over the whole set.
-    if (p.mateIn === 2) {
-      let keys = 0;
-      for (const m of E.legalMoves(st)) {
-        if (E.forcesMate(st, m, plies, true) && ++keys > 1) break;
-      }
-      if (keys !== 1) problems.push('solution not unique (' + keys + ' keys)');
+    if (p.line.length < 2) problems.push('line too short');
+    if (p.line.length % 2 !== 0) problems.push('line should end on a solver move');
+    let st = E.loadFEN(p.fen);
+    for (const u of p.line) {
+      const m = findUci(st, u);
+      if (!m) { problems.push('illegal move ' + u); break; }
+      st = E.makeMove(st, m);
     }
-    if (p.mateIn > 1 && E.mateMoves(st, plies - 2, true, true).length) problems.push('faster mate exists');
-
+    if (!problems.length && p.themes.some(t => /^mateIn\d$/.test(t) || t === 'mate')) {
+      if (!(E.legalMoves(st).length === 0 && E.inCheck(st))) problems.push('mate theme but no mate at line end');
+    }
+    if (typeof p.rating !== 'number' || p.rating < 300 || p.rating > 3500) problems.push('bad rating');
     if (problems.length) {
       failed++;
-      out('FAIL mate-in-' + p.mateIn + ' ' + p.fen + ' : ' + problems.join('; '));
+      out('FAIL ' + p.id + ' (' + p.rating + '): ' + problems.join('; '));
     }
   }
-  out('Verified ' + PUZZLES.length + ' puzzles (' + Object.keys(counts).sort().map(k => counts[k] + ' M' + k).join(', ') + ')');
+  out('Verified ' + PUZZLES.length + ' puzzles | difficulty: ' + JSON.stringify(buckets));
   out(failed === 0 ? 'ALL PUZZLES VALID' : failed + ' PUZZLE(S) INVALID');
 })();

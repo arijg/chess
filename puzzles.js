@@ -1,6 +1,7 @@
-/* puzzles.js — chess.com-style puzzle mode: solve engine-verified mate
-   puzzles with feedback, hints, auto-replying defense, and an Elo-ish
-   persistent rating. */
+/* puzzles.js — chess.com-style puzzle mode over the Lichess puzzle set:
+   the opponent's setup move plays automatically, then the solver follows
+   the stored solution line with feedback, hints, an auto-replying
+   defender, and an Elo-ish persistent rating. */
 (function () {
   'use strict';
 
@@ -17,12 +18,13 @@
   const promoEl = $('promo');
   const promoBox = $('promo-box');
 
-  let puzzle = null, st = null, legal = [], remaining = 0, solverColor = 'w';
+  let puzzle = null, st = null, legal = [], stepIdx = 1, solverColor = 'w';
   let selected = null, busy = false, failed = false, solved = false;
   let hintStage = 0, hintMove = null, pending = null, lastMove = null;
   let flipped = false;
   let marks = {};
   let squareEls = [];
+  let gen = 0; // invalidates queued animations when a new puzzle loads
 
   const store = loadStore();
   function loadStore() {
@@ -38,22 +40,41 @@
 
   /* ---------------- Puzzle lifecycle ---------------- */
 
+  const uciOf = m => E.sqToAlg(m.from) + E.sqToAlg(m.to) + (m.promotion ? m.promotion.toLowerCase() : '');
+
+  function findUci(u) {
+    const from = E.algToSq(u.slice(0, 2));
+    const to = E.algToSq(u.slice(2, 4));
+    const promo = u[4] ? u[4].toUpperCase() : null;
+    return legal.find(m => m.from === from && m.to === to && (m.promotion || null) === promo);
+  }
+
   function pickPuzzle() {
-    let pool = PUZZLES.filter(p => !store.done[p.fen]);
+    let pool = PUZZLES.filter(p => !store.done[p.id]);
     if (!pool.length) { store.done = {}; saveStore(); pool = PUZZLES.slice(); }
     const target = store.rating + (Math.random() * 300 - 150);
     pool.sort((a, b) => Math.abs(a.rating - target) - Math.abs(b.rating - target));
     return pool[0];
   }
 
+  // Solver moves left, counting the one currently expected.
+  const movesLeft = () => Math.ceil((puzzle.line.length - stepIdx) / 2);
+
+  function mateTheme() {
+    const t = puzzle.themes.find(x => /^mateIn\d$/.test(x));
+    return t ? +t.slice(6) : 0;
+  }
+
   function loadPuzzle(p) {
+    gen++;
+    const myGen = gen;
     puzzle = p || pickPuzzle();
     st = E.loadFEN(puzzle.fen);
     legal = E.legalMoves(st);
-    remaining = puzzle.mateIn * 2 - 1;
-    solverColor = st.turn;
+    stepIdx = 1;
+    solverColor = st.turn === 'w' ? 'b' : 'w'; // solver answers the setup move
     flipped = solverColor === 'b';
-    selected = null; busy = false; failed = false; solved = false;
+    selected = null; busy = true; failed = false; solved = false;
     hintStage = 0; hintMove = null; pending = null; lastMove = null;
     marks = {};
     promoEl.hidden = true;
@@ -61,7 +82,19 @@
     buildBoard();
     renderBoard();
     renderPanel();
-    setFeedback('Find the mating line.', '');
+    setFeedback('Watch the opponent’s move…', '');
+    setTimeout(() => {
+      if (myGen !== gen) return;
+      const setup = findUci(puzzle.line[0]);
+      st = E.makeMove(st, setup);
+      legal = E.legalMoves(st);
+      lastMove = setup;
+      busy = false;
+      sound('move');
+      renderBoard();
+      renderPanel();
+      setFeedback('Your move — find the best reply.', '');
+    }, 700);
   }
 
   function expectedScore() {
@@ -80,7 +113,7 @@
 
   function onSolved() {
     solved = true;
-    store.done[puzzle.fen] = 1;
+    store.done[puzzle.id] = 1;
     store.solvedCount++;
     let delta = 0;
     if (!failed) {
@@ -91,26 +124,21 @@
     saveStore();
     $('next').textContent = 'Next Puzzle →';
     renderPanel();
-    setFeedback(failed ? 'Solved — but with mistakes.' : 'Solved! +' + delta + ' rating', 'good');
+    const tags = puzzle.themes.length ? ' · ' + puzzle.themes.join(', ') : '';
+    setFeedback((failed ? 'Solved — but with mistakes.' : 'Solved! +' + delta + ' rating')
+      + ' (puzzle ' + puzzle.rating + tags + ')', 'good');
   }
 
   /* ---------------- Move handling ---------------- */
 
-  const uciOf = m => E.sqToAlg(m.from) + E.sqToAlg(m.to) + (m.promotion ? m.promotion.toLowerCase() : '');
-
-  // The first move must be the composition's key move (or an immediate mate);
-  // checking arbitrary quiet first moves to full depth is too slow. Later
-  // moves are validated live with the exact solver — any forced mate counts.
-  function isCorrect(m) {
-    if (E.forcesMate(st, m, 1)) return true;
-    if (remaining === puzzle.mateIn * 2 - 1) return uciOf(m) === puzzle.best;
-    return E.forcesMate(st, m, remaining, true);
-  }
+  // The stored solution move is required; any immediate checkmate also counts.
+  const isCorrect = m => uciOf(m) === puzzle.line[stepIdx] || E.forcesMate(st, m, 1);
 
   function applyUserMove(m) {
     busy = true;
     pending = null;
     promoEl.hidden = true;
+    const myGen = gen;
     const prevSt = st, prevLegal = legal, prevLast = lastMove;
     const ok = isCorrect(m);
     st = E.makeMove(st, m);
@@ -120,18 +148,20 @@
 
     if (ok) {
       marks = { good: m.to };
-      const mate = legal.length === 0;
-      sound(mate ? 'end' : 'check');
+      const mate = legal.length === 0 && E.inCheck(st);
+      const finished = mate || stepIdx >= puzzle.line.length - 1;
+      sound(finished ? 'end' : 'check');
       renderBoard();
-      if (mate) { onSolved(); return; }
-      remaining -= 2;
+      if (finished) { onSolved(); return; }
       setFeedback('Correct — keep going!', 'good');
       renderPanel();
       setTimeout(() => {
-        const reply = E.bestMove(st, 2);
+        if (myGen !== gen) return;
+        const reply = findUci(puzzle.line[stepIdx + 1]);
         st = E.makeMove(st, reply);
         legal = E.legalMoves(st);
         lastMove = reply;
+        stepIdx += 2;
         marks = {};
         hintMove = null; hintStage = 0;
         sound('move');
@@ -147,6 +177,7 @@
       onMistake();
       setFeedback('That’s not it — try again.', 'bad');
       setTimeout(() => {
+        if (myGen !== gen) return;
         st = prevSt; legal = prevLegal; lastMove = prevLast;
         marks = {};
         renderBoard();
@@ -346,9 +377,11 @@
     $('rating').textContent = store.rating;
     $('streak').textContent = store.streak;
     $('solved-count').textContent = store.solvedCount;
+    const who = solverColor === 'w' ? 'White' : 'Black';
+    const mateN = mateTheme();
     $('status').textContent = solved
       ? 'Solved!'
-      : (solverColor === 'w' ? 'White' : 'Black') + ' to move — mate in ' + Math.ceil(remaining / 2);
+      : who + ' to move — ' + (mateN ? 'mate in ' + Math.min(mateN, movesLeft()) : 'find the best move');
   }
 
   function setFeedback(text, kind) {
@@ -360,12 +393,7 @@
   $('hint').addEventListener('click', () => {
     if (solved || busy || pending) return;
     onMistake();
-    if (!hintMove) {
-      if (remaining === puzzle.mateIn * 2 - 1) {
-        hintMove = legal.find(m => uciOf(m) === puzzle.best);
-      }
-      if (!hintMove) hintMove = E.mateMoves(st, remaining, true, true)[0];
-    }
+    if (!hintMove) hintMove = findUci(puzzle.line[stepIdx]);
     hintStage++;
     marks = hintStage === 1
       ? { hint: hintMove.from }
@@ -407,7 +435,7 @@
 
   // Tiny harness hook so behavior can be driven in automated checks.
   window.__puzzles = {
-    state: () => ({ fen: puzzle.fen, fenNow: E.fenKey(st), mateIn: puzzle.mateIn, best: puzzle.best, remaining, solved, failed, busy, rating: store.rating, streak: store.streak }),
+    state: () => ({ id: puzzle.id, fen: puzzle.fen, fenNow: E.fenKey(st), line: puzzle.line, stepIdx, themes: puzzle.themes, puzzleRating: puzzle.rating, solved, failed, busy, rating: store.rating, streak: store.streak }),
     load: i => loadPuzzle(PUZZLES[i]),
   };
 
