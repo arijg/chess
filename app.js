@@ -1,4 +1,5 @@
-/* app.js — board UI, clocks, move list, drag & drop, and game flow. */
+/* app.js — board UI, clocks, move list, drag & drop, history navigation,
+   post-game analysis, premoves, and game flow. */
 (function () {
   'use strict';
 
@@ -15,13 +16,18 @@
   let states, moveLog, fenCounts, currentLegal;
   let selected = null, gameOver = null, aiThinking = false, pending = null;
   let hint = null; // {from, to, stage: 1|2} — engine suggestion for the side to move
+  let viewPly = null; // null = live; otherwise index into states[] being viewed
+  let premove = null, premoveSel = null; // queued move for the human while the AI thinks
+  let analysis = null; // { evals[], anns[], best{}, progress, complete }
   let flipped = false;
-  let gen = 0; // generation counter: invalidates queued AI moves after new game/undo
-  const settings = { mode: 'two', human: 'w', depth: 2, minutes: 10 };
+  let gen = 0; // generation counter: invalidates queued work after new game/undo
+  const settings = { mode: 'two', human: 'w', depth: 2, minutes: 10, autoQueen: false };
   let clocks = null, clockTimer = null, lastTick = 0;
   let squareEls = [];
 
   const cur = () => states[states.length - 1];
+  const isLive = () => viewPly === null;
+  const viewState = () => isLive() ? cur() : states[viewPly];
   const isHumanTurn = () => settings.mode === 'two' || cur().turn === settings.human;
   const isAITurn = () => settings.mode === 'ai' && cur().turn !== settings.human && !gameOver;
 
@@ -34,6 +40,7 @@
     fenCounts = new Map([[E.fenKey(states[0]), 1]]);
     currentLegal = E.legalMoves(cur());
     selected = null; gameOver = null; pending = null; aiThinking = false; hint = null;
+    viewPly = null; premove = null; premoveSel = null; analysis = null;
     flipped = settings.mode === 'ai' && settings.human === 'b';
     promoEl.hidden = true;
     gameoverEl.hidden = true;
@@ -70,7 +77,7 @@
     renderClocks();
   }
 
-  function applyMove(m) {
+  function applyMove(m, animate) {
     const st = cur();
     const san = E.san(st, m);
     const next = E.makeMove(st, m);
@@ -92,8 +99,13 @@
 
     renderAll();
     updateEval();
-    if (gameOver) showGameOver();
-    else if (isAITurn()) scheduleAI();
+    if (animate && isLive()) animateMove(m, false);
+    if (gameOver) { showGameOver(); return; }
+    if (isAITurn()) scheduleAI();
+    else if (premove && isHumanTurn()) {
+      const myGen = gen;
+      setTimeout(() => { if (myGen === gen) executePremove(); }, 150);
+    }
   }
 
   function scheduleAI() {
@@ -104,9 +116,17 @@
       if (myGen !== gen) return; // game was reset/undone while waiting
       const m = E.bestMove(cur(), settings.depth);
       aiThinking = false;
-      if (m && !gameOver) applyMove(m);
+      if (m && !gameOver) applyMove(m, true);
       else renderStatus();
     }, 350);
+  }
+
+  function executePremove() {
+    if (!premove || gameOver || aiThinking || !isHumanTurn()) return;
+    const cands = currentLegal.filter(m => m.from === premove.from && m.to === premove.to);
+    premove = null;
+    if (!cands.length) { renderBoard(); return; } // no longer legal: cancelled
+    applyMove(cands.find(x => x.promotion === 'Q') || cands[0], true);
   }
 
   function undo() {
@@ -124,6 +144,7 @@
     gameOver = null;
     selected = null;
     hint = null;
+    viewPly = null; premove = null; premoveSel = null; analysis = null;
     gameoverEl.hidden = true;
     currentLegal = E.legalMoves(cur());
     // If we undid past a flag fall, give that side a little time back.
@@ -132,6 +153,110 @@
     updateEval();
     if (isAITurn()) scheduleAI();
   }
+
+  /* ---------------- History navigation ---------------- */
+
+  function setView(p) {
+    const target = (p === null || p >= states.length - 1) ? null : Math.max(0, p);
+    if (target === viewPly) return;
+    const prevIdx = isLive() ? states.length - 1 : viewPly;
+    viewPly = target;
+    selected = null; hint = null;
+    renderBoard();
+    renderMoves();
+    renderStatus();
+    renderGraph();
+    updateEval();
+    const newIdx = isLive() ? states.length - 1 : viewPly;
+    if (newIdx === prevIdx + 1) animateMove(moveLog[newIdx - 1].m, false);
+    else if (newIdx === prevIdx - 1) animateMove(moveLog[newIdx].m, true);
+  }
+
+  const navRel = d => setView((isLive() ? states.length - 1 : viewPly) + d);
+
+  window.addEventListener('keydown', e => {
+    const tag = document.activeElement && document.activeElement.tagName;
+    if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
+    if (e.key === 'ArrowLeft') { navRel(-1); e.preventDefault(); }
+    else if (e.key === 'ArrowRight') { navRel(1); e.preventDefault(); }
+    else if (e.key === 'ArrowUp') { setView(0); e.preventDefault(); }
+    else if (e.key === 'ArrowDown') { setView(null); e.preventDefault(); }
+    else if (e.key === 'Escape' && (premove || premoveSel !== null)) {
+      premove = null; premoveSel = null; renderBoard();
+    }
+  });
+
+  /* ---------------- Post-game analysis ---------------- */
+
+  function startAnalysis() {
+    gameoverEl.hidden = true;
+    if (analysis && analysis.complete) return;
+    analysis = {
+      evals: new Array(states.length).fill(null),
+      anns: new Array(moveLog.length).fill(null),
+      best: {}, progress: 0, complete: false,
+    };
+    const myGen = gen;
+    renderGraph();
+    const step = () => {
+      if (myGen !== gen || !analysis) return;
+      const i = analysis.progress;
+      if (i >= states.length) { finishAnalysis(); return; }
+      analysis.evals[i] = E.evaluatePosition(states[i], 2);
+      analysis.progress++;
+      renderGraph();
+      renderStatus();
+      setTimeout(step, 0);
+    };
+    step();
+  }
+
+  function finishAnalysis() {
+    const clamp = v => Math.max(-1500, Math.min(1500, v));
+    for (let j = 0; j < moveLog.length; j++) {
+      const before = clamp(analysis.evals[j]);
+      const after = clamp(analysis.evals[j + 1]);
+      const drop = j % 2 === 0 ? before - after : after - before; // from the mover's view
+      analysis.anns[j] = drop >= 250 ? '??' : drop >= 120 ? '?' : drop >= 60 ? '?!' : null;
+      if (analysis.anns[j] === '??' || analysis.anns[j] === '?') {
+        const bm = E.bestMove(states[j], 2);
+        if (bm) analysis.best[j] = E.san(states[j], bm);
+      }
+    }
+    analysis.complete = true;
+    renderMoves();
+    renderGraph();
+    renderStatus();
+  }
+
+  function renderGraph() {
+    const wrap = $('eval-graph-wrap');
+    if (!analysis) { wrap.hidden = true; return; }
+    wrap.hidden = false;
+    const W = 300, H = 64, n = states.length;
+    const clamp = v => Math.max(-600, Math.min(600, v));
+    let path = '';
+    analysis.evals.forEach((v, i) => {
+      if (v === null) return;
+      const x = n > 1 ? (i / (n - 1)) * W : 0;
+      const y = H / 2 - (clamp(v) / 600) * (H / 2 - 3);
+      path += (path ? ' L ' : 'M ') + x.toFixed(1) + ' ' + y.toFixed(1);
+    });
+    const idx = isLive() ? states.length - 1 : viewPly;
+    const mx = n > 1 ? (idx / (n - 1)) * W : 0;
+    $('eval-graph').innerHTML = '<svg viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none">'
+      + '<line x1="0" y1="' + H / 2 + '" x2="' + W + '" y2="' + H / 2 + '" stroke="#4a4843"/>'
+      + (path ? '<path d="' + path + '" fill="none" stroke="#81b64c" stroke-width="1.5"/>' : '')
+      + '<line x1="' + mx.toFixed(1) + '" y1="0" x2="' + mx.toFixed(1) + '" y2="' + H + '" stroke="#ffffff66"/>'
+      + '</svg>';
+  }
+
+  $('eval-graph-wrap').addEventListener('click', e => {
+    if (!analysis || states.length < 2) return;
+    const r = e.currentTarget.getBoundingClientRect();
+    const frac = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width));
+    setView(Math.round(frac * (states.length - 1)));
+  });
 
   /* ---------------- Board DOM ---------------- */
 
@@ -168,10 +293,13 @@
   const squareEl = sq => boardEl.querySelector('.square[data-sq="' + sq + '"]');
 
   function renderBoard() {
-    const st = cur();
-    const last = moveLog.length ? moveLog[moveLog.length - 1].m : null;
+    const st = viewState();
+    const live = isLive();
+    const lastIdx = live ? moveLog.length - 1 : viewPly - 1;
+    const last = lastIdx >= 0 ? moveLog[lastIdx].m : null;
     const checkSq = E.inCheck(st) ? E.findKing(st.board, st.turn) : -1;
-    const targets = selected !== null ? currentLegal.filter(m => m.from === selected) : [];
+    const targets = live && selected !== null ? currentLegal.filter(m => m.from === selected) : [];
+    const myColor = settings.mode === 'two' ? st.turn : settings.human;
 
     for (const el of squareEls) {
       const sq = +el.dataset.sq;
@@ -188,44 +316,112 @@
       } else if (span) span.remove();
 
       if (last && (sq === last.from || sq === last.to)) el.classList.add('hl');
-      if (sq === selected) el.classList.add('hl');
+      if (live && sq === selected) el.classList.add('hl');
       if (sq === checkSq) el.classList.add('in-check');
-      if (hint && (sq === hint.from || (hint.stage === 2 && sq === hint.to))) el.classList.add('hint-mark');
+      if (live && hint && (sq === hint.from || (hint.stage === 2 && sq === hint.to))) el.classList.add('hint-mark');
+      if (live && premove && (sq === premove.from || sq === premove.to)) el.classList.add('premove');
+      if (live && premoveSel === sq) el.classList.add('premove');
       const t = targets.find(m => m.to === sq);
       if (t) el.classList.add(t.captured ? 'capture-hint' : 'move-hint');
-      if (p && !gameOver && !aiThinking && E.colorOf(p) === st.turn && isHumanTurn()) {
+      if (live && p && !gameOver
+        && ((E.colorOf(p) === st.turn && isHumanTurn() && !aiThinking)
+          || (settings.mode === 'ai' && E.colorOf(p) === myColor && !isHumanTurn()))) {
         el.classList.add('grabbable');
       }
     }
   }
 
-  /* ---------------- Input: click + drag ---------------- */
+  /* ---------------- Move animation (FLIP) ---------------- */
+
+  function flipAnimate(pieceSq, fromSq) {
+    const toEl = squareEl(pieceSq), fromEl = squareEl(fromSq);
+    const piece = toEl && toEl.querySelector('.piece');
+    if (!piece || !fromEl) return;
+    const a = fromEl.getBoundingClientRect(), b = toEl.getBoundingClientRect();
+    const dx = a.left - b.left, dy = a.top - b.top;
+    if (!dx && !dy) return;
+    piece.style.transition = 'none';
+    piece.style.transform = 'translate(' + dx + 'px,' + dy + 'px)';
+    requestAnimationFrame(() => {
+      piece.style.transition = 'transform .15s ease';
+      piece.style.transform = '';
+      setTimeout(() => { piece.style.transition = ''; }, 220);
+    });
+  }
+
+  function animateMove(m, reverse) {
+    if (reverse) flipAnimate(m.from, m.to);
+    else flipAnimate(m.to, m.from);
+    if (m.flags === 'ck') {
+      if (reverse) flipAnimate(m.to + 1, m.to - 1);
+      else flipAnimate(m.to - 1, m.to + 1);
+    }
+    if (m.flags === 'cq') {
+      if (reverse) flipAnimate(m.to - 2, m.to + 1);
+      else flipAnimate(m.to + 1, m.to - 2);
+    }
+  }
+
+  /* ---------------- Input: click + drag + premove ---------------- */
 
   boardEl.addEventListener('pointerdown', e => {
     if (e.pointerType === 'mouse' && e.button !== 0) return;
-    if (gameOver || aiThinking || pending) return;
+    if (gameOver || pending) return;
+    if (!isLive()) { setView(null); return; }
     const sqEl = e.target.closest('.square');
     if (!sqEl) return;
     const sq = +sqEl.dataset.sq;
     const st = cur();
 
-    if (selected !== null && currentLegal.some(m => m.from === selected && m.to === sq)) {
-      moveTo(selected, sq);
-      return;
+    if (isHumanTurn() && !aiThinking) {
+      if (selected !== null && currentLegal.some(m => m.from === selected && m.to === sq)) {
+        moveTo(selected, sq, false);
+        return;
+      }
+      const p = st.board[sq];
+      if (p && E.colorOf(p) === st.turn) {
+        const reclick = selected === sq;
+        selected = sq;
+        renderBoard();
+        startDrag(e, sq, reclick, false);
+      } else if (selected !== null) {
+        selected = null;
+        renderBoard();
+      }
+    } else if (settings.mode === 'ai') {
+      // Opponent is moving: queue a premove.
+      const p = st.board[sq];
+      if (premove && (sq === premove.from || sq === premove.to)) {
+        premove = null; premoveSel = null;
+        renderBoard();
+        return;
+      }
+      if (premoveSel !== null && sq !== premoveSel) {
+        premove = { from: premoveSel, to: sq };
+        premoveSel = null;
+        renderBoard();
+        return;
+      }
+      if (p && E.colorOf(p) === settings.human) {
+        premoveSel = sq;
+        renderBoard();
+        startDrag(e, sq, false, true);
+      } else if (premoveSel !== null || premove) {
+        premoveSel = null; premove = null;
+        renderBoard();
+      }
     }
-    const p = st.board[sq];
-    if (p && E.colorOf(p) === st.turn && isHumanTurn()) {
-      const reclick = selected === sq;
-      selected = sq;
-      renderBoard();
-      startDrag(e, sq, reclick);
-    } else if (selected !== null) {
-      selected = null;
+  });
+
+  boardEl.addEventListener('contextmenu', e => {
+    if (premove || premoveSel !== null) {
+      e.preventDefault();
+      premove = null; premoveSel = null;
       renderBoard();
     }
   });
 
-  function startDrag(e, from, reclick) {
+  function startDrag(e, from, reclick, isPremove) {
     const pieceEl = squareEl(from)?.querySelector('.piece');
     if (!pieceEl) return;
     const rect = pieceEl.getBoundingClientRect();
@@ -258,8 +454,16 @@
       const target = el && el.closest('.square');
       if (target) {
         const to = +target.dataset.sq;
+        if (isPremove) {
+          if (to !== from) {
+            premove = { from, to };
+            premoveSel = null;
+          }
+          renderBoard();
+          return;
+        }
         if (to !== from && currentLegal.some(m => m.from === from && m.to === to)) {
-          moveTo(from, to);
+          moveTo(from, to, true);
           return;
         }
         if (to === from && reclick && !moved) {
@@ -275,14 +479,18 @@
     window.addEventListener('pointercancel', onCancel);
   }
 
-  function moveTo(from, to) {
+  function moveTo(from, to, viaDrag) {
     const candidates = currentLegal.filter(m => m.from === from && m.to === to);
     if (!candidates.length) return;
     if (candidates[0].promotion) {
+      if (settings.autoQueen) {
+        applyMove(candidates.find(x => x.promotion === 'Q'), !viaDrag);
+        return;
+      }
       pending = { candidates };
       showPromotion(to);
     } else {
-      applyMove(candidates[0]);
+      applyMove(candidates[0], !viaDrag);
     }
   }
 
@@ -296,8 +504,7 @@
       b.innerHTML = '<div class="promo-piece pc-' + color + t + '"></div>';
       b.addEventListener('click', ev => {
         ev.stopPropagation();
-        const m = pending.candidates.find(x => x.promotion === t);
-        applyMove(m);
+        applyMove(pending.candidates.find(x => x.promotion === t), true);
       });
       promoBox.appendChild(b);
     }
@@ -325,6 +532,7 @@
     renderClocks();
     renderStatus();
     renderMoves();
+    renderGraph();
     renderEvalBar(lastEval);
   }
 
@@ -335,11 +543,13 @@
   // Recompute the position score off the click path so the move renders first.
   function updateEval() {
     const seq = ++updateEval.seq;
-    if (gameOver) { renderEvalBar(lastEval); return; }
-    const st = cur();
+    const idx = isLive() ? states.length - 1 : viewPly;
+    if (analysis && analysis.evals[idx] != null) { renderEvalBar(analysis.evals[idx]); return; }
+    if (gameOver && isLive()) { renderEvalBar(lastEval); return; }
+    const stv = viewState();
     setTimeout(() => {
       if (seq !== updateEval.seq) return;
-      renderEvalBar(E.evaluatePosition(st, 2));
+      renderEvalBar(E.evaluatePosition(stv, 2));
     }, 20);
   }
   updateEval.seq = 0;
@@ -352,9 +562,10 @@
     bar.classList.toggle('flipped', flipped);
 
     let frac, text;
-    if (gameOver && gameOver.result === '1-0') { frac = 1; text = '1-0'; }
-    else if (gameOver && gameOver.result === '0-1') { frac = 0; text = '0-1'; }
-    else if (gameOver) { frac = 0.5; text = '½'; }
+    const pinResult = gameOver && isLive();
+    if (pinResult && gameOver.result === '1-0') { frac = 1; text = '1-0'; }
+    else if (pinResult && gameOver.result === '0-1') { frac = 0; text = '0-1'; }
+    else if (pinResult) { frac = 0.5; text = '½'; }
     else if (cp > 90000) { frac = 0.98; text = 'M'; }
     else if (cp < -90000) { frac = 0.02; text = 'M'; }
     else {
@@ -447,13 +658,34 @@
     }
   }
 
+  function annLabel(a) {
+    return a === '??' ? 'Blunder' : a === '?' ? 'Mistake' : 'Inaccuracy';
+  }
+
   function renderStatus() {
     const el = $('status');
+    $('hint').hidden = !!gameOver;
+    $('analyze').hidden = !gameOver;
+    if (analysis && !analysis.complete) {
+      el.textContent = 'Analyzing… ' + analysis.progress + '/' + states.length;
+      return;
+    }
+    if (!isLive()) {
+      if (viewPly === 0) { el.textContent = 'Start position (→ to step forward)'; return; }
+      const j = viewPly - 1;
+      let s = (Math.floor(j / 2) + 1) + (j % 2 === 0 ? '. ' : '… ') + moveLog[j].san;
+      if (analysis && analysis.complete && analysis.anns[j]) {
+        s += ' — ' + annLabel(analysis.anns[j]);
+        if (analysis.best[j]) s += ' · better: ' + analysis.best[j];
+      }
+      el.textContent = s;
+      return;
+    }
     if (gameOver) {
       const [a, b] = resultText(gameOver);
       el.textContent = a + ' — ' + b;
     } else if (aiThinking) {
-      el.textContent = 'Computer is thinking…';
+      el.textContent = 'Computer is thinking…' + (premove ? ' (premove set)' : '');
     } else {
       el.textContent = (cur().turn === 'w' ? 'White' : 'Black') + ' to move'
         + (E.inCheck(cur()) ? ' — check!' : '');
@@ -463,6 +695,7 @@
   function renderMoves() {
     const el = $('moves');
     el.innerHTML = '';
+    const viewedMoveIdx = isLive() ? moveLog.length - 1 : viewPly - 1;
     for (let i = 0; i < moveLog.length; i += 2) {
       const row = document.createElement('div');
       row.className = 'move-row';
@@ -472,8 +705,15 @@
       row.appendChild(num);
       for (const j of [i, i + 1]) {
         const s = document.createElement('span');
-        s.className = 'move-san' + (j === moveLog.length - 1 ? ' current' : '');
-        s.textContent = moveLog[j] ? moveLog[j].san : '';
+        s.className = 'move-san' + (j === viewedMoveIdx ? ' current' : '');
+        if (moveLog[j]) {
+          const ann = analysis && analysis.complete ? analysis.anns[j] : null;
+          s.textContent = moveLog[j].san + (ann || '');
+          s.dataset.ply = j + 1;
+          if (ann === '??') s.classList.add('ann-blunder');
+          else if (ann === '?') s.classList.add('ann-mistake');
+          else if (ann === '?!') s.classList.add('ann-inacc');
+        }
         row.appendChild(s);
       }
       el.appendChild(row);
@@ -484,8 +724,13 @@
       r.textContent = gameOver.result;
       el.appendChild(r);
     }
-    el.scrollTop = el.scrollHeight;
+    if (isLive()) el.scrollTop = el.scrollHeight;
   }
+
+  $('moves').addEventListener('click', e => {
+    const span = e.target.closest('.move-san');
+    if (span && span.dataset.ply) setView(+span.dataset.ply);
+  });
 
   function showGameOver() {
     const [title, sub] = resultText(gameOver);
@@ -539,9 +784,14 @@
     settings.minutes = +e.target.value;
     newGame();
   });
+  $('autoqueen').addEventListener('change', e => {
+    settings.autoQueen = e.target.value === '1';
+  });
   $('new').addEventListener('click', newGame);
   $('go-new').addEventListener('click', newGame);
   $('go-close').addEventListener('click', () => { gameoverEl.hidden = true; });
+  $('go-analyze').addEventListener('click', startAnalysis);
+  $('analyze').addEventListener('click', startAnalysis);
   $('flip').addEventListener('click', () => {
     flipped = !flipped;
     buildBoard();
@@ -549,7 +799,7 @@
   });
   $('undo').addEventListener('click', undo);
   $('hint').addEventListener('click', () => {
-    if (gameOver || aiThinking || pending || !isHumanTurn()) return;
+    if (gameOver || aiThinking || pending || !isHumanTurn() || !isLive()) return;
     if (!hint) {
       const m = E.bestMove(cur(), 3);
       if (!m) return;
@@ -559,6 +809,10 @@
     }
     renderBoard();
   });
+  $('nav-start').addEventListener('click', () => setView(0));
+  $('nav-back').addEventListener('click', () => navRel(-1));
+  $('nav-fwd').addEventListener('click', () => navRel(1));
+  $('nav-end').addEventListener('click', () => setView(null));
 
   newGame();
 })();

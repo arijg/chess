@@ -351,6 +351,13 @@ main {
   background: rgba(255, 170, 0, .55);
 }
 
+.square.premove::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(220, 50, 50, .45);
+}
+
 @keyframes shake {
   0%, 100% { transform: translateX(0); }
   25% { transform: translateX(-6%); }
@@ -502,6 +509,33 @@ main {
 
 .move-san.current {
   background: rgba(255, 255, 255, .14);
+}
+
+.move-san[data-ply] { cursor: pointer; }
+.move-san[data-ply]:hover { background: rgba(255, 255, 255, .08); }
+.move-san.ann-blunder { color: #fa412d; }
+.move-san.ann-mistake { color: #ffa459; }
+.move-san.ann-inacc { color: #f0c15c; }
+
+.nav-btns { display: flex; gap: 6px; }
+
+.nav-btns .btn {
+  padding: 5px 8px;
+  font-size: 13px;
+  box-shadow: none;
+}
+
+#eval-graph-wrap {
+  background: var(--panel-2);
+  border-radius: 6px;
+  padding: 4px;
+  cursor: pointer;
+}
+
+#eval-graph svg {
+  display: block;
+  width: 100%;
+  height: 64px;
 }
 
 .move-result {

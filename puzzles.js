@@ -22,6 +22,7 @@
   let marks = {};
   let squareEls = [];
   let gen = 0; // invalidates queued animations when a new puzzle loads
+  let rush = null; // Puzzle Rush run: {score, strikes, timeLeft, target, used, over, timer}
 
   const store = loadStore();
   function loadStore() {
@@ -95,9 +96,10 @@
       busy = false;
       sound('move');
       renderBoard();
+      animateMove(setup);
       renderPanel();
       setFeedback('Your move — find the best reply.', '');
-    }, 700);
+    }, rush && !rush.over ? 350 : 700);
   }
 
   function expectedScore() {
@@ -116,6 +118,16 @@
 
   function onSolved() {
     solved = true;
+    if (rush && !rush.over) {
+      rush.score++;
+      rush.target += 35 + Math.random() * 30; // ramp the difficulty
+      renderPanel();
+      setFeedback('✓ ' + rush.score + ' solved — next!', 'good');
+      setTimeout(() => {
+        if (rush && !rush.over) loadPuzzle(pickRushPuzzle());
+      }, 500);
+      return;
+    }
     store.done[puzzle.id] = 1;
     store.solvedCount++;
     let delta = 0;
@@ -137,7 +149,7 @@
   // The stored solution move is required; any immediate checkmate also counts.
   const isCorrect = m => uciOf(m) === puzzle.line[stepIdx] || E.forcesMate(st, m, 1);
 
-  function applyUserMove(m) {
+  function applyUserMove(m, viaDrag) {
     busy = true;
     pending = null;
     promoEl.hidden = true;
@@ -155,6 +167,7 @@
       const finished = mate || stepIdx >= puzzle.line.length - 1;
       sound(finished ? 'end' : 'check');
       renderBoard();
+      if (!viaDrag) animateMove(m);
       if (finished) { onSolved(); return; }
       setFeedback('Correct — keep going!', 'good');
       renderPanel();
@@ -169,14 +182,28 @@
         hintMove = null; hintStage = 0;
         sound('move');
         renderBoard();
+        animateMove(reply);
         renderPanel();
         setFeedback('Your move.', '');
         busy = false;
-      }, 600);
+      }, rush && !rush.over ? 350 : 600);
     } else {
       marks = { bad: m.to };
       sound('error');
       renderBoard();
+      if (!viaDrag) animateMove(m);
+      if (rush && !rush.over) {
+        // Rush: no retries — a wrong move is a strike and the run moves on.
+        rush.strikes++;
+        renderPanel();
+        setFeedback('✗ Strike ' + rush.strikes + ' of 3', 'bad');
+        setTimeout(() => {
+          if (!rush || rush.over) return;
+          if (rush.strikes >= 3) endRush();
+          else loadPuzzle(pickRushPuzzle());
+        }, 700);
+        return;
+      }
       onMistake();
       setFeedback('That’s not it — try again.', 'bad');
       setTimeout(() => {
@@ -189,15 +216,39 @@
     }
   }
 
-  function moveTo(from, to) {
+  function moveTo(from, to, viaDrag) {
     const candidates = legal.filter(m => m.from === from && m.to === to);
     if (!candidates.length) return;
     if (candidates[0].promotion) {
       pending = { candidates };
       showPromotion(to);
     } else {
-      applyUserMove(candidates[0]);
+      applyUserMove(candidates[0], viaDrag);
     }
+  }
+
+  /* ---------------- Move animation (FLIP) ---------------- */
+
+  function flipAnimate(pieceSq, fromSq) {
+    const toEl = squareEl(pieceSq), fromEl = squareEl(fromSq);
+    const piece = toEl && toEl.querySelector('.piece');
+    if (!piece || !fromEl) return;
+    const a = fromEl.getBoundingClientRect(), b = toEl.getBoundingClientRect();
+    const dx = a.left - b.left, dy = a.top - b.top;
+    if (!dx && !dy) return;
+    piece.style.transition = 'none';
+    piece.style.transform = 'translate(' + dx + 'px,' + dy + 'px)';
+    requestAnimationFrame(() => {
+      piece.style.transition = 'transform .15s ease';
+      piece.style.transform = '';
+      setTimeout(() => { piece.style.transition = ''; }, 220);
+    });
+  }
+
+  function animateMove(m) {
+    flipAnimate(m.to, m.from);
+    if (m.flags === 'ck') flipAnimate(m.to - 1, m.to + 1);
+    if (m.flags === 'cq') flipAnimate(m.to + 1, m.to - 2);
   }
 
   /* ---------------- Board DOM (same look as the game page) ---------------- */
@@ -276,7 +327,7 @@
     const sq = +sqEl.dataset.sq;
 
     if (selected !== null && legal.some(m => m.from === selected && m.to === sq)) {
-      moveTo(selected, sq);
+      moveTo(selected, sq, false);
       return;
     }
     const p = st.board[sq];
@@ -325,7 +376,7 @@
       if (target) {
         const to = +target.dataset.sq;
         if (to !== from && legal.some(m => m.from === from && m.to === to)) {
-          moveTo(from, to);
+          moveTo(from, to, true);
           return;
         }
         if (to === from && reclick && !moved) {
@@ -371,12 +422,100 @@
     renderBoard();
   });
 
+  /* ---------------- Puzzle Rush ---------------- */
+
+  const fmtTime = ms => {
+    const s = Math.max(0, Math.ceil(ms / 1000));
+    return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+  };
+
+  function startRush() {
+    if (rush && rush.timer) clearInterval(rush.timer);
+    rush = {
+      score: 0, strikes: 0, target: 450, timeLeft: 300000,
+      last: performance.now(), used: new Set(), over: false,
+    };
+    rush.timer = setInterval(rushTick, 200);
+    $('rush').textContent = 'End Rush';
+    $('rush-exit').hidden = true;
+    $('hint').hidden = true;
+    $('next').hidden = true;
+    $('difficulty-wrap').hidden = true;
+    loadPuzzle(pickRushPuzzle());
+  }
+
+  function rushTick() {
+    if (!rush || rush.over) return;
+    const now = performance.now();
+    rush.timeLeft -= now - rush.last;
+    rush.last = now;
+    if (rush.timeLeft <= 0) { rush.timeLeft = 0; endRush(); }
+    renderPanel();
+  }
+
+  function pickRushPuzzle() {
+    let pool = PUZZLES.filter(p => !rush.used.has(p.id));
+    if (!pool.length) pool = PUZZLES.slice();
+    let best = pool[0], bd = Infinity;
+    for (const p of pool) {
+      const d = Math.abs(p.rating - rush.target);
+      if (d < bd) { bd = d; best = p; }
+    }
+    rush.used.add(best.id);
+    return best;
+  }
+
+  function endRush() {
+    if (!rush || rush.over) return;
+    rush.over = true;
+    clearInterval(rush.timer);
+    gen++; // cancel any queued advance/reply
+    busy = true; // lock the board
+    const isBest = rush.score > (store.rushBest || 0);
+    store.rushBest = Math.max(store.rushBest || 0, rush.score);
+    saveStore();
+    $('rush').textContent = 'Play Again';
+    $('rush-exit').hidden = false;
+    renderPanel();
+    sound('end');
+    setFeedback('Run over! Score ' + rush.score + (isBest ? ' — new best!' : ' · Best ' + store.rushBest), isBest ? 'good' : '');
+  }
+
+  function exitRush() {
+    if (rush && rush.timer) clearInterval(rush.timer);
+    rush = null;
+    $('rush').textContent = '⚡ Rush';
+    $('rush-exit').hidden = true;
+    $('hint').hidden = false;
+    $('next').hidden = false;
+    $('difficulty-wrap').hidden = false;
+    loadPuzzle();
+  }
+
+  $('rush').addEventListener('click', () => {
+    if (!rush || rush.over) startRush();
+    else endRush();
+  });
+  $('rush-exit').addEventListener('click', exitRush);
+
   /* ---------------- Panel ---------------- */
 
   function renderPanel() {
-    $('rating').textContent = store.rating;
-    $('streak').textContent = store.streak;
-    $('solved-count').textContent = store.solvedCount;
+    if (rush) {
+      $('rating-label').textContent = 'Score';
+      $('streak-label').textContent = 'Strikes';
+      $('solved-label').textContent = 'Time';
+      $('rating').textContent = rush.score;
+      $('streak').textContent = rush.strikes ? '✗'.repeat(rush.strikes) : '—';
+      $('solved-count').textContent = fmtTime(rush.timeLeft);
+    } else {
+      $('rating-label').textContent = 'Rating';
+      $('streak-label').textContent = 'Streak';
+      $('solved-label').textContent = 'Solved';
+      $('rating').textContent = store.rating;
+      $('streak').textContent = store.streak;
+      $('solved-count').textContent = store.solvedCount;
+    }
     const who = solverColor === 'w' ? 'White' : 'Black';
     const mateN = mateTheme();
     $('status').textContent = solved
@@ -391,7 +530,7 @@
   }
 
   $('hint').addEventListener('click', () => {
-    if (solved || busy || pending) return;
+    if (solved || busy || pending || rush) return;
     onMistake();
     if (!hintMove) hintMove = findUci(puzzle.line[stepIdx]);
     hintStage++;
@@ -403,6 +542,7 @@
   });
 
   $('next').addEventListener('click', () => {
+    if (rush) return;
     if (busy && !solved) return; // solved leaves the board locked, but Next must work
     if (!solved) onMistake();
     loadPuzzle();
@@ -441,7 +581,7 @@
 
   // Tiny harness hook so behavior can be driven in automated checks.
   window.__puzzles = {
-    state: () => ({ id: puzzle.id, fen: puzzle.fen, fenNow: E.fenKey(st), line: puzzle.line, stepIdx, themes: puzzle.themes, puzzleRating: puzzle.rating, solved, failed, busy, rating: store.rating, streak: store.streak }),
+    state: () => ({ id: puzzle.id, fen: puzzle.fen, fenNow: E.fenKey(st), line: puzzle.line, stepIdx, themes: puzzle.themes, puzzleRating: puzzle.rating, solved, failed, busy, rating: store.rating, streak: store.streak, rush: rush ? { score: rush.score, strikes: rush.strikes, timeLeft: rush.timeLeft, over: rush.over, best: store.rushBest || 0 } : null }),
     load: i => loadPuzzle(PUZZLES[i]),
   };
 
