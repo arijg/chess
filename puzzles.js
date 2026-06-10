@@ -6,10 +6,7 @@
   'use strict';
 
   const E = ChessEngine;
-  const GLYPHS = {
-    K: '♚︎', Q: '♛︎', R: '♜︎',
-    B: '♝︎', N: '♞︎', P: '♟︎',
-  };
+  const pieceClass = p => 'pc-' + E.colorOf(p) + E.typeOf(p);
   const K_FACTOR = 24;
   const STORE_KEY = 'chess-puzzles-v1';
 
@@ -252,8 +249,7 @@
           span = document.createElement('span');
           el.appendChild(span);
         }
-        span.className = 'piece ' + E.colorOf(p);
-        span.textContent = GLYPHS[E.typeOf(p)];
+        span.className = 'piece ' + pieceClass(p);
       } else if (span) span.remove();
 
       if (lastMove && (sq === lastMove.from || sq === lastMove.to)) el.classList.add('hl');
@@ -301,7 +297,6 @@
     const rect = pieceEl.getBoundingClientRect();
     const ghost = pieceEl.cloneNode(true);
     ghost.classList.add('drag-ghost');
-    ghost.style.fontSize = getComputedStyle(pieceEl).fontSize;
     ghost.style.width = rect.width + 'px';
     ghost.style.height = rect.height + 'px';
     document.body.appendChild(ghost);
@@ -353,8 +348,7 @@
     promoBox.innerHTML = '';
     for (const t of ['Q', 'N', 'R', 'B']) {
       const b = document.createElement('button');
-      b.className = color;
-      b.textContent = GLYPHS[t];
+      b.innerHTML = '<div class="promo-piece pc-' + color + t + '"></div>';
       b.addEventListener('click', ev => {
         ev.stopPropagation();
         applyUserMove(pending.candidates.find(x => x.promotion === t));

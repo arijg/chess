@@ -59,15 +59,26 @@ main {
 }
 
 .captured {
-  font-size: 19px;
-  color: #9e9d9b;
+  display: flex;
+  align-items: center;
   line-height: 1;
 }
 
 .cap-group {
-  letter-spacing: -2px; /* slight huddle within a same-type group */
-  margin-right: 8px;
+  display: inline-flex;
+  margin-right: 7px;
 }
+
+.cap-piece {
+  width: 19px;
+  height: 19px;
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+}
+
+/* Same-type pieces huddle into an overlapping stack, chess.com style. */
+.cap-group .cap-piece:not(:first-child) { margin-left: -10px; }
 
 .captured .adv {
   font-size: 12px;
@@ -211,34 +222,39 @@ main {
 .square.dark .coord { color: var(--light-sq); }
 
 .piece {
-  position: relative;
+  position: absolute;
+  inset: 0;
   z-index: 2;
-  font-size: 13.8cqw;
-  line-height: 1;
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
   pointer-events: none;
-}
-
-.piece.w {
-  color: #f8f8f8;
-  text-shadow: 0 0 1.5px #444, 0 0 1.5px #444, 0 0 2.5px #333, 0 1.5px 2px rgba(0, 0, 0, .35);
-}
-
-.piece.b {
-  color: #2b2926;
-  text-shadow: 0 0 1.5px #777, 0 1.5px 2px rgba(0, 0, 0, .35);
+  filter: drop-shadow(0 1.5px 1.5px rgba(0, 0, 0, .3));
 }
 
 .piece.dragging-src { opacity: .35; }
+
+/* Cburnett piece set (BSD license) — see README for attribution. */
+.pc-wK { background-image: url('pieces/wK.svg'); }
+.pc-wQ { background-image: url('pieces/wQ.svg'); }
+.pc-wR { background-image: url('pieces/wR.svg'); }
+.pc-wB { background-image: url('pieces/wB.svg'); }
+.pc-wN { background-image: url('pieces/wN.svg'); }
+.pc-wP { background-image: url('pieces/wP.svg'); }
+.pc-bK { background-image: url('pieces/bK.svg'); }
+.pc-bQ { background-image: url('pieces/bQ.svg'); }
+.pc-bR { background-image: url('pieces/bR.svg'); }
+.pc-bB { background-image: url('pieces/bB.svg'); }
+.pc-bN { background-image: url('pieces/bN.svg'); }
+.pc-bP { background-image: url('pieces/bP.svg'); }
 
 .square.grabbable { cursor: grab; }
 
 .drag-ghost {
   position: fixed;
+  inset: auto;
   z-index: 100;
   pointer-events: none;
-  display: flex;
-  align-items: center;
-  justify-content: center;
   transform: translate(-50%, -50%);
 }
 
@@ -268,14 +284,21 @@ main {
   background: #fff;
   cursor: pointer;
   aspect-ratio: 1;
-  font-size: 40px;
-  line-height: 1;
   padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 #promo-box button:hover { background: #f1c40f55; }
-#promo-box button.w { color: #f8f8f8; text-shadow: 0 0 1.5px #444, 0 0 2.5px #333; }
-#promo-box button.b { color: #2b2926; }
+
+#promo-box .promo-piece {
+  width: 84%;
+  height: 84%;
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+}
 
 #gameover {
   display: flex;

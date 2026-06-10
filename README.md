@@ -31,7 +31,8 @@ python3 -m http.server 8420
 | --- | --- |
 | `chess-engine.js` | Rules engine on a [0x88 board](https://www.chessprogramming.org/0x88): move generation, legality via king-safety filtering, SAN, FEN, draw detection. Also a small negamax AI with alpha-beta pruning and piece-square tables. |
 | `app.js` | UI: board rendering, pointer-event drag & drop, clocks, move list, promotion picker, WebAudio sounds. |
-| `style.css` / `index.html` | Layout and chess.com-style theming. Pieces are Unicode glyphs — no images. |
+| `style.css` / `index.html` | Layout and chess.com-style theming. |
+| `pieces/` | Piece images: the [Cburnett chess set](https://commons.wikimedia.org/wiki/Category:SVG_chess_pieces) by Colin M. L. Burnett (BSD license), via Wikimedia Commons. |
 | `test-perft.js` | Verification: [perft](https://www.chessprogramming.org/Perft) node counts for 5 standard positions plus rule spot-checks. |
 | `puzzles.html` / `puzzles.js` | Puzzle mode: solve flow, hints, rating, auto-replying defense. |
 | `puzzles-data.js` | 5,000 puzzles sampled from the [Lichess puzzle database](https://database.lichess.org/) (CC0): real ratings, solution lines, themes. Stratified across eight rating bands with per-band quality thresholds (popularity and play count, relaxed at the extremes), every line re-validated move-by-move by the engine. |

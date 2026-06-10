@@ -3,12 +3,8 @@
   'use strict';
 
   const E = ChessEngine;
-  // ︎ forces text (non-emoji) rendering of the glyphs.
-  const GLYPHS = {
-    K: '♚︎', Q: '♛︎', R: '♜︎',
-    B: '♝︎', N: '♞︎', P: '♟︎',
-  };
   const VALUES = { P: 1, N: 3, B: 3, R: 5, Q: 9 };
+  const pieceClass = p => 'pc-' + E.colorOf(p) + E.typeOf(p);
 
   const $ = id => document.getElementById(id);
   const boardEl = $('board');
@@ -18,6 +14,7 @@
 
   let states, moveLog, fenCounts, currentLegal;
   let selected = null, gameOver = null, aiThinking = false, pending = null;
+  let hint = null; // {from, to, stage: 1|2} — engine suggestion for the side to move
   let flipped = false;
   let gen = 0; // generation counter: invalidates queued AI moves after new game/undo
   const settings = { mode: 'two', human: 'w', depth: 2, minutes: 10 };
@@ -36,7 +33,7 @@
     moveLog = [];
     fenCounts = new Map([[E.fenKey(states[0]), 1]]);
     currentLegal = E.legalMoves(cur());
-    selected = null; gameOver = null; pending = null; aiThinking = false;
+    selected = null; gameOver = null; pending = null; aiThinking = false; hint = null;
     flipped = settings.mode === 'ai' && settings.human === 'b';
     promoEl.hidden = true;
     gameoverEl.hidden = true;
@@ -82,7 +79,7 @@
     const key = E.fenKey(next);
     fenCounts.set(key, (fenCounts.get(key) || 0) + 1);
     currentLegal = E.legalMoves(next);
-    selected = null; pending = null;
+    selected = null; pending = null; hint = null;
     promoEl.hidden = true;
 
     const status = E.gameStatus(next, fenCounts);
@@ -126,6 +123,7 @@
     }
     gameOver = null;
     selected = null;
+    hint = null;
     gameoverEl.hidden = true;
     currentLegal = E.legalMoves(cur());
     // If we undid past a flag fall, give that side a little time back.
@@ -186,13 +184,13 @@
           span = document.createElement('span');
           el.appendChild(span);
         }
-        span.className = 'piece ' + E.colorOf(p);
-        span.textContent = GLYPHS[E.typeOf(p)];
+        span.className = 'piece ' + pieceClass(p);
       } else if (span) span.remove();
 
       if (last && (sq === last.from || sq === last.to)) el.classList.add('hl');
       if (sq === selected) el.classList.add('hl');
       if (sq === checkSq) el.classList.add('in-check');
+      if (hint && (sq === hint.from || (hint.stage === 2 && sq === hint.to))) el.classList.add('hint-mark');
       const t = targets.find(m => m.to === sq);
       if (t) el.classList.add(t.captured ? 'capture-hint' : 'move-hint');
       if (p && !gameOver && !aiThinking && E.colorOf(p) === st.turn && isHumanTurn()) {
@@ -233,7 +231,6 @@
     const rect = pieceEl.getBoundingClientRect();
     const ghost = pieceEl.cloneNode(true);
     ghost.classList.add('drag-ghost');
-    ghost.style.fontSize = getComputedStyle(pieceEl).fontSize;
     ghost.style.width = rect.width + 'px';
     ghost.style.height = rect.height + 'px';
     document.body.appendChild(ghost);
@@ -296,8 +293,7 @@
     promoBox.innerHTML = '';
     for (const t of ['Q', 'N', 'R', 'B']) {
       const b = document.createElement('button');
-      b.className = color;
-      b.textContent = GLYPHS[t];
+      b.innerHTML = '<div class="promo-piece pc-' + color + t + '"></div>';
       b.addEventListener('click', ev => {
         ev.stopPropagation();
         const m = pending.candidates.find(x => x.promotion === t);
@@ -408,11 +404,12 @@
     const html = (pieces, adv) => {
       const groups = [];
       for (const p of pieces) {
-        const t = E.typeOf(p);
-        if (groups.length && groups[groups.length - 1].t === t) groups[groups.length - 1].n++;
-        else groups.push({ t, n: 1 });
+        const cls = pieceClass(p);
+        if (groups.length && groups[groups.length - 1].cls === cls) groups[groups.length - 1].n++;
+        else groups.push({ cls, n: 1 });
       }
-      return groups.map(g => '<span class="cap-group">' + GLYPHS[g.t].repeat(g.n) + '</span>').join('')
+      return groups.map(g => '<span class="cap-group">'
+        + ('<span class="cap-piece ' + g.cls + '"></span>').repeat(g.n) + '</span>').join('')
         + (adv > 0 ? '<span class="adv">+' + adv + '</span>' : '');
     };
     $('cap-bottom').innerHTML = html(capB, diff);
@@ -551,6 +548,17 @@
     renderAll();
   });
   $('undo').addEventListener('click', undo);
+  $('hint').addEventListener('click', () => {
+    if (gameOver || aiThinking || pending || !isHumanTurn()) return;
+    if (!hint) {
+      const m = E.bestMove(cur(), 3);
+      if (!m) return;
+      hint = { from: m.from, to: m.to, stage: 1 };
+    } else if (hint.stage === 1) {
+      hint.stage = 2;
+    }
+    renderBoard();
+  });
 
   newGame();
 })();
