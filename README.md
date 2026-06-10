@@ -23,7 +23,7 @@ python3 -m http.server 8420
 - **Evaluation bar**: a chess.com-analysis-style bar beside the board showing who's winning, driven by a shallow engine search
 - **Game clocks**: 1 / 3 / 5 / 10 / 30 minute controls, or untimed
 - **Move list** in standard algebraic notation, captured-piece trays with material count, move sounds, board flip, undo
-- **Puzzles** (`puzzles.html`): 600 puzzles sampled from the [Lichess puzzle database](https://database.lichess.org/) (CC0) with real Glicko-2 difficulty ratings (519–2454), full solution lines, and theme tags, with chess.com-style solving — animated setup move, correct/wrong feedback, auto-replying defense, two-stage hints, and a persistent Elo-style rating, streak, and solved count
+- **Puzzles** (`puzzles.html`): 5,000 puzzles sampled from the [Lichess puzzle database](https://database.lichess.org/) (CC0) with real Glicko-2 difficulty ratings (435–2922), full solution lines, and theme tags, with chess.com-style solving — animated setup move, correct/wrong feedback, auto-replying defense, two-stage hints, a difficulty selector, and a persistent Elo-style rating, streak, and solved count
 
 ## How it works
 
@@ -34,7 +34,7 @@ python3 -m http.server 8420
 | `style.css` / `index.html` | Layout and chess.com-style theming. Pieces are Unicode glyphs — no images. |
 | `test-perft.js` | Verification: [perft](https://www.chessprogramming.org/Perft) node counts for 5 standard positions plus rule spot-checks. |
 | `puzzles.html` / `puzzles.js` | Puzzle mode: solve flow, hints, rating, auto-replying defense. |
-| `puzzles-data.js` | 600 puzzles sampled from the [Lichess puzzle database](https://database.lichess.org/) (CC0): real ratings, solution lines, themes. Stratified across difficulty, quality-filtered (popularity ≥ 90–95, plays ≥ 1000–5000), every line re-validated move-by-move by the engine. |
+| `puzzles-data.js` | 5,000 puzzles sampled from the [Lichess puzzle database](https://database.lichess.org/) (CC0): real ratings, solution lines, themes. Stratified across eight rating bands with per-band quality thresholds (popularity and play count, relaxed at the extremes), every line re-validated move-by-move by the engine. |
 | `convert-puzzles.js` | Validates Lichess-format puzzles against the engine and emits `puzzles-data.js`. |
 | `import-puzzles.js` | Alternative source: classifies bare FEN collections (e.g. yacpdb) as mate-in-1/2/3 with the exact solver. |
 | `gen-puzzles.js` | Alternative source: plays semi-random games and keeps positions where the exact mate solver finds a unique forced mate. |
