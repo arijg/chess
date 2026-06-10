@@ -49,9 +49,15 @@
     return legal.find(m => m.from === from && m.to === to && (m.promotion || null) === promo);
   }
 
+  const BANDS = { easy: [0, 950], medium: [950, 1400], hard: [1400, 1800], expert: [1800, 9999] };
+
   function pickPuzzle() {
-    let pool = PUZZLES.filter(p => !store.done[p.id]);
-    if (!pool.length) { store.done = {}; saveStore(); pool = PUZZLES.slice(); }
+    const band = BANDS[store.difficulty];
+    const inBand = p => !band || (p.rating >= band[0] && p.rating < band[1]);
+    let pool = PUZZLES.filter(p => !store.done[p.id] && inBand(p));
+    if (!pool.length) pool = PUZZLES.filter(inBand); // band exhausted: allow repeats
+    if (!pool.length) pool = PUZZLES.slice();
+    if (band) return pool[Math.floor(Math.random() * pool.length)];
     const target = store.rating + (Math.random() * 300 - 150);
     pool.sort((a, b) => Math.abs(a.rating - target) - Math.abs(b.rating - target));
     return pool[0];
@@ -408,6 +414,12 @@
     loadPuzzle();
   });
 
+  $('difficulty').addEventListener('change', e => {
+    store.difficulty = e.target.value;
+    saveStore();
+    loadPuzzle(); // settings change, not a skip — no rating penalty
+  });
+
   /* ---------------- Sounds (WebAudio, no assets) ---------------- */
 
   function sound(kind) {
@@ -439,5 +451,6 @@
     load: i => loadPuzzle(PUZZLES[i]),
   };
 
+  $('difficulty').value = store.difficulty || 'auto';
   loadPuzzle();
 })();

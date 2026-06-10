@@ -353,6 +353,8 @@ main {
 .nav a.active { background: var(--green); color: #fff; }
 .nav a:hover { filter: brightness(1.15); }
 
+.controls-full { grid-template-columns: 1fr; }
+
 .stats { display: flex; gap: 8px; }
 
 .stat {
