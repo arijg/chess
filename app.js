@@ -45,7 +45,8 @@
 
   /* ---------------- Game lifecycle ---------------- */
 
-  function newGame() {
+  function newGame(opts) {
+    const handoff = opts && Array.isArray(opts.moves) ? opts : null; // also called from click handlers
     gen++;
     states = [E.initialState()];
     moveLog = [];
@@ -53,6 +54,22 @@
     currentLegal = E.legalMoves(cur());
     selected = null; gameOver = null; pending = null; aiThinking = false; hint = null;
     viewPly = null; premove = null; premoveSel = null; analysis = null; explore = null;
+    if (handoff) {
+      // Replay an opening line handed over from the openings page.
+      for (const u of handoff.moves) {
+        const m = currentLegal.find(x => uciOfMove(x) === u);
+        if (!m) break;
+        const san = E.san(cur(), m);
+        const next = E.makeMove(cur(), m);
+        states.push(next);
+        moveLog.push({ m, san });
+        const key = E.fenKey(next);
+        fenCounts.set(key, (fenCounts.get(key) || 0) + 1);
+        currentLegal = E.legalMoves(next);
+      }
+      settings.human = cur().turn; // the player continues from the book position
+      $('playas').value = settings.human;
+    }
     flipped = settings.mode === 'ai' && settings.human === 'b';
     promoEl.hidden = true;
     gameoverEl.hidden = true;
@@ -1126,5 +1143,21 @@
   $('nav-fwd').addEventListener('click', () => navRel(1));
   $('nav-end').addEventListener('click', () => setView(null));
 
-  newGame();
+  // A "play vs Stockfish from here" handoff from the openings page.
+  let handoff = null;
+  try {
+    const h = JSON.parse(localStorage.getItem('chess-handoff') || 'null');
+    localStorage.removeItem('chess-handoff');
+    if (h && Array.isArray(h.moves) && Date.now() - h.t < 60000) handoff = h;
+  } catch (_) { /* ignore */ }
+  if (handoff) {
+    settings.mode = 'ai';
+    if (!SF_LEVELS[settings.depth]) settings.depth = 'sf1800';
+    $('mode').value = 'ai';
+    $('diff').value = settings.depth;
+    $('playas-wrap').hidden = false;
+    $('diff-wrap').hidden = false;
+    Stockfish.init().catch(() => {});
+  }
+  newGame(handoff);
 })();

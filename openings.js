@@ -24,9 +24,59 @@
   let marks = {};
   let squareEls = [];
   let gen = 0;
+  let runMistakes = 0;     // mistakes in the current practice run
+  let reviewQueue = null;  // remaining lines in an active review session
 
   // Openings are matched on the move sequence; precompute token arrays.
   for (const o of OPENINGS) o.moves = o.uci.split(' ');
+  const byUci = new Map(OPENINGS.map(o => [o.uci, o]));
+
+  /* ---------------- Spaced repetition (Leitner boxes) ---------------- */
+
+  const STORE_KEY = 'chess-openings-v1';
+  // Box intervals: 10 minutes, then 1 / 3 / 7 / 21 days.
+  const BOX_MS = [600000, 86400000, 3 * 86400000, 7 * 86400000, 21 * 86400000];
+
+  const store = loadStore();
+  function loadStore() {
+    try {
+      const s = JSON.parse(localStorage.getItem(STORE_KEY));
+      if (s && s.lines) return s;
+    } catch (_) { /* fresh start */ }
+    return { lines: {} };
+  }
+  function saveStore() {
+    try { localStorage.setItem(STORE_KEY, JSON.stringify(store)); } catch (_) { /* private mode */ }
+  }
+
+  // Clean run: the line moves up a box (longer until next review).
+  // Any mistake: back to box 0, due again in 10 minutes.
+  function record(o, clean) {
+    const e = store.lines[o.uci] || { box: 0, reps: 0, lapses: 0 };
+    e.reps++;
+    if (clean) e.box = Math.min(BOX_MS.length - 1, e.box + 1);
+    else { e.box = 0; e.lapses++; }
+    e.due = Date.now() + BOX_MS[e.box];
+    store.lines[o.uci] = e;
+    saveStore();
+  }
+
+  function dueOpenings() {
+    const now = Date.now();
+    return Object.entries(store.lines)
+      .filter(([u, e]) => e.due <= now && byUci.has(u))
+      .sort((a, b) => a[1].due - b[1].due)
+      .map(([u]) => byUci.get(u));
+  }
+
+  function renderReviewBar() {
+    const due = dueOpenings().length;
+    const learned = Object.keys(store.lines).length;
+    $('review').textContent = due ? 'Review (' + due + ' due)' : 'Review';
+    $('review').title = learned
+      ? learned + ' line' + (learned > 1 ? 's' : '') + ' in your review schedule'
+      : 'Practice a line to start your review schedule';
+  }
 
   /* ---------------- Opening detection ---------------- */
 
@@ -110,6 +160,7 @@
     if (mode === 'practice') {
       const expected = target.moves[seq.length];
       if (uciOf(m) !== expected) {
+        runMistakes++;
         marks = { bad: m.to };
         sound('error');
         const prev = { st, legal, lastMove };
@@ -133,8 +184,21 @@
       if (seq.length >= target.moves.length) {
         mode = 'learn';
         sound('end');
-        setStatus('Line complete — you played the whole ' + target.name + '!', 'good');
-        renderPanels(true);
+        record(target, runMistakes === 0);
+        renderReviewBar();
+        let msg = runMistakes === 0
+          ? 'Line complete — perfect! Next review in ' + fmtInterval(store.lines[target.uci].box) + '.'
+          : 'Line complete with ' + runMistakes + ' slip' + (runMistakes > 1 ? 's' : '') + ' — due again in 10 minutes.';
+        if (reviewQueue && reviewQueue.length) {
+          const next = reviewQueue.shift();
+          setStatus(msg + ' Next: ' + next.name, 'good');
+          const myGen = gen;
+          setTimeout(() => { if (myGen === gen) beginPractice(next); }, 1600);
+        } else {
+          if (reviewQueue) { msg += ' Review session done! 🎉'; reviewQueue = null; }
+          setStatus(msg, 'good');
+          renderPanels(true);
+        }
       } else {
         setStatus('Correct! ' + seq.length + '/' + target.moves.length, 'good');
       }
@@ -188,20 +252,43 @@
     setTimeout(step, 300);
   }
 
+  const fmtInterval = box => ['10 minutes', '1 day', '3 days', '7 days', '21 days'][box];
+
+  function beginPractice(o) {
+    target = o;
+    reset(true);
+    mode = 'practice';
+    runMistakes = 0;
+    renderPanels();
+    setStatus('Play the ' + o.name + ' from memory (' + o.moves.length + ' moves'
+      + (reviewQueue ? ' · ' + (reviewQueue.length + 1) + ' to review' : '') + ').', '');
+  }
+
   function startPractice() {
     if (mode === 'practice') { // exit
       mode = 'learn';
+      reviewQueue = null;
       renderPanels();
       setStatus('Exploring freely.', '');
       return;
     }
-    target = target && (seqStr() === '' || (target.uci + ' ').startsWith(seqStr() + ' ') || (seqStr() + ' ').startsWith(target.uci + ' '))
+    const t = target && (seqStr() === '' || (target.uci + ' ').startsWith(seqStr() + ' ') || (seqStr() + ' ').startsWith(target.uci + ' '))
       ? target : deepestMatch();
-    if (!target) { setStatus('Play or search an opening first.', 'bad'); return; }
-    reset(true);
-    mode = 'practice';
-    renderPanels();
-    setStatus('Play the ' + target.name + ' from memory (' + target.moves.length + ' moves).', '');
+    if (!t) { setStatus('Play or search an opening first.', 'bad'); return; }
+    reviewQueue = null;
+    beginPractice(t);
+  }
+
+  function startReview() {
+    const due = dueOpenings();
+    if (!due.length) {
+      setStatus(Object.keys(store.lines).length
+        ? 'Nothing due for review — come back later!'
+        : 'Practice a line first to add it to your review schedule.', '');
+      return;
+    }
+    reviewQueue = due.slice(1);
+    beginPractice(due[0]);
   }
 
   /* ---------------- Panels ---------------- */
@@ -524,6 +611,12 @@
   $('back').addEventListener('click', back);
   $('reset').addEventListener('click', () => { target = null; $('search').value = ''; reset(); });
   $('practice').addEventListener('click', startPractice);
+  $('review').addEventListener('click', startReview);
+  $('play-sf').addEventListener('click', () => {
+    // Hand the current position to the game page to play out vs Stockfish.
+    try { localStorage.setItem('chess-handoff', JSON.stringify({ moves: seq, t: Date.now() })); } catch (_) { /* */ }
+    location.href = 'index.html';
+  });
 
   window.addEventListener('keydown', e => {
     const tag = document.activeElement && document.activeElement.tagName;
@@ -549,4 +642,5 @@
   buildBoard();
   renderBoard();
   renderPanels();
+  renderReviewBar();
 })();
