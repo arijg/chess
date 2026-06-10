@@ -516,6 +516,8 @@ main {
 .move-san.ann-blunder { color: #fa412d; }
 .move-san.ann-mistake { color: #ffa459; }
 .move-san.ann-inacc { color: #f0c15c; }
+.move-san.ann-great { color: #26c2a3; }
+.move-san.ann-best { color: var(--green); }
 
 .nav-btns { display: flex; gap: 6px; }
 

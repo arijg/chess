@@ -234,7 +234,7 @@
     analysis = {
       evals: new Array(states.length).fill(null),
       anns: new Array(moveLog.length).fill(null),
-      best: {}, bestUci: {}, progress: 0, complete: false,
+      best: {}, bestUci: {}, gap: {}, progress: 0, complete: false,
       engine: 'Stockfish',
     };
     const myGen = gen;
@@ -259,7 +259,7 @@
       sfAnalyzeStep(myGen);
       return;
     }
-    Stockfish.go({ fen: fullFen(st) }, { depth: 12 }).then(r => {
+    Stockfish.go({ fen: fullFen(st) }, { depth: 12, multiPV: 2 }).then(r => {
       if (myGen !== gen || !analysis) return;
       let cp = 0;
       if (r.score) {
@@ -269,7 +269,15 @@
         if (st.turn === 'b') cp = -cp; // UCI scores are from the side to move
       }
       analysis.evals[i] = cp;
-      if (r.best && i < moveLog.length) analysis.bestUci[i] = r.best;
+      if (r.best && i < moveLog.length) {
+        analysis.bestUci[i] = r.best;
+        // Gap between the best and second-best move (mover's perspective):
+        // a huge gap means the best move was the only good one.
+        const toCp = ln => ln.type === 'mate' ? (ln.value > 0 ? 1 : -1) * 10000 : ln.value;
+        analysis.gap[i] = r.lines && r.lines.length >= 2
+          ? Math.max(0, toCp(r.lines[0]) - toCp(r.lines[1]))
+          : 0;
+      }
       analysis.progress++;
       renderGraph();
       renderStatus();
@@ -286,6 +294,13 @@
     const i = analysis.progress;
     if (i >= states.length) { finishAnalysis(); return; }
     if (analysis.evals[i] === null) analysis.evals[i] = E.evaluatePosition(states[i], 2);
+    if (i < moveLog.length && !analysis.bestUci[i]) {
+      const tops = E.topMoves(states[i], 2, 2);
+      if (tops.length) {
+        analysis.bestUci[i] = uciOfMove(tops[0].m);
+        analysis.gap[i] = tops.length > 1 ? Math.max(0, tops[0].score - tops[1].score) : 0;
+      }
+    }
     analysis.progress++;
     renderGraph();
     renderStatus();
@@ -295,6 +310,13 @@
   function finishAnalysis() {
     const clamp = v => Math.max(-1500, Math.min(1500, v));
     for (let j = 0; j < moveLog.length; j++) {
+      // Played the engine's top move: Best (★), or Great (!) when it was
+      // the only good move (the runner-up loses 250+ centipawns).
+      if (analysis.bestUci[j] && uciOfMove(moveLog[j].m) === analysis.bestUci[j]) {
+        analysis.anns[j] = (analysis.gap[j] || 0) >= 250 && E.legalMoves(states[j]).length > 1
+          ? '!' : '★';
+        continue;
+      }
       const before = clamp(analysis.evals[j]);
       const after = clamp(analysis.evals[j + 1]);
       const drop = j % 2 === 0 ? before - after : after - before; // from the mover's view
@@ -930,7 +952,11 @@
   }
 
   function annLabel(a) {
-    return a === '??' ? 'Blunder' : a === '?' ? 'Mistake' : 'Inaccuracy';
+    return a === '??' ? 'Blunder'
+      : a === '?' ? 'Mistake'
+      : a === '?!' ? 'Inaccuracy'
+      : a === '!' ? 'Great move — the only good one'
+      : 'Best move';
   }
 
   function renderStatus() {
@@ -994,6 +1020,8 @@
           if (ann === '??') s.classList.add('ann-blunder');
           else if (ann === '?') s.classList.add('ann-mistake');
           else if (ann === '?!') s.classList.add('ann-inacc');
+          else if (ann === '!') s.classList.add('ann-great');
+          else if (ann === '★') s.classList.add('ann-best');
         }
         row.appendChild(s);
       }
