@@ -14,6 +14,7 @@
 
   let states, moveLog, fenCounts, currentLegal;
   let selected = null, gameOver = null, aiThinking = false, pending = null;
+  let hint = null; // {from, to, stage: 1|2} — engine suggestion for the side to move
   let flipped = false;
   let gen = 0; // generation counter: invalidates queued AI moves after new game/undo
   const settings = { mode: 'two', human: 'w', depth: 2, minutes: 10 };
@@ -32,7 +33,7 @@
     moveLog = [];
     fenCounts = new Map([[E.fenKey(states[0]), 1]]);
     currentLegal = E.legalMoves(cur());
-    selected = null; gameOver = null; pending = null; aiThinking = false;
+    selected = null; gameOver = null; pending = null; aiThinking = false; hint = null;
     flipped = settings.mode === 'ai' && settings.human === 'b';
     promoEl.hidden = true;
     gameoverEl.hidden = true;
@@ -78,7 +79,7 @@
     const key = E.fenKey(next);
     fenCounts.set(key, (fenCounts.get(key) || 0) + 1);
     currentLegal = E.legalMoves(next);
-    selected = null; pending = null;
+    selected = null; pending = null; hint = null;
     promoEl.hidden = true;
 
     const status = E.gameStatus(next, fenCounts);
@@ -122,6 +123,7 @@
     }
     gameOver = null;
     selected = null;
+    hint = null;
     gameoverEl.hidden = true;
     currentLegal = E.legalMoves(cur());
     // If we undid past a flag fall, give that side a little time back.
@@ -188,6 +190,7 @@
       if (last && (sq === last.from || sq === last.to)) el.classList.add('hl');
       if (sq === selected) el.classList.add('hl');
       if (sq === checkSq) el.classList.add('in-check');
+      if (hint && (sq === hint.from || (hint.stage === 2 && sq === hint.to))) el.classList.add('hint-mark');
       const t = targets.find(m => m.to === sq);
       if (t) el.classList.add(t.captured ? 'capture-hint' : 'move-hint');
       if (p && !gameOver && !aiThinking && E.colorOf(p) === st.turn && isHumanTurn()) {
@@ -545,6 +548,17 @@
     renderAll();
   });
   $('undo').addEventListener('click', undo);
+  $('hint').addEventListener('click', () => {
+    if (gameOver || aiThinking || pending || !isHumanTurn()) return;
+    if (!hint) {
+      const m = E.bestMove(cur(), 3);
+      if (!m) return;
+      hint = { from: m.from, to: m.to, stage: 1 };
+    } else if (hint.stage === 1) {
+      hint.stage = 2;
+    }
+    renderBoard();
+  });
 
   newGame();
 })();
