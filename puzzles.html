@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Chess Puzzles</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main>
+    <section class="board-col">
+      <div id="board-wrap">
+        <div id="board"></div>
+        <div id="promo" hidden>
+          <div id="promo-box"></div>
+        </div>
+      </div>
+    </section>
+
+    <aside class="panel">
+      <h1>Puzzles</h1>
+      <nav class="nav">
+        <a href="index.html">Play</a>
+        <a class="active" href="puzzles.html">Puzzles</a>
+      </nav>
+      <div class="stats">
+        <div class="stat"><b id="rating"></b><span>Rating</span></div>
+        <div class="stat"><b id="streak"></b><span>Streak</span></div>
+        <div class="stat"><b id="solved-count"></b><span>Solved</span></div>
+      </div>
+      <div class="controls controls-full">
+        <label>Difficulty
+          <select id="difficulty">
+            <option value="auto">Auto — match my rating</option>
+            <option value="easy">Easy (under 950)</option>
+            <option value="medium">Medium (950–1400)</option>
+            <option value="hard">Hard (1400–1800)</option>
+            <option value="expert">Expert (1800+)</option>
+          </select>
+        </label>
+      </div>
+      <div id="status"></div>
+      <div id="feedback"></div>
+      <div class="actions">
+        <button id="hint" class="btn">Hint</button>
+        <button id="next" class="btn primary">Skip →</button>
+      </div>
+    </aside>
+  </main>
+
+  <script src="chess-engine.js"></script>
+  <script src="puzzles-data.js"></script>
+  <script src="puzzles.js"></script>
+</body>
+</html>

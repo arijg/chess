@@ -305,6 +305,93 @@ main {
 
 .go-actions { display: flex; gap: 10px; justify-content: center; }
 
+/* ---------- Puzzle mode ---------- */
+
+.square.mark-good::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(129, 182, 76, .6);
+}
+
+.square.mark-bad::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(250, 65, 45, .55);
+}
+
+.square.hint-mark::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(255, 170, 0, .55);
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-6%); }
+  75% { transform: translateX(6%); }
+}
+
+.square.mark-bad .piece { animation: shake .25s; }
+
+.nav { display: flex; gap: 8px; }
+
+.nav a {
+  flex: 1;
+  text-align: center;
+  padding: 8px;
+  border-radius: 6px;
+  background: var(--panel-2);
+  color: var(--text);
+  text-decoration: none;
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.nav a.active { background: var(--green); color: #fff; }
+.nav a:hover { filter: brightness(1.15); }
+
+.controls-full { grid-template-columns: 1fr; }
+
+.stats { display: flex; gap: 8px; }
+
+.stat {
+  flex: 1;
+  background: var(--panel-2);
+  border-radius: 6px;
+  padding: 8px;
+  text-align: center;
+}
+
+.stat b {
+  display: block;
+  color: var(--text-bright);
+  font-size: 18px;
+}
+
+.stat span {
+  font-size: 11px;
+  color: #989795;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+}
+
+#feedback {
+  text-align: center;
+  font-weight: 700;
+  border-radius: 6px;
+  padding: 12px;
+  background: var(--panel-2);
+  min-height: 44px;
+  font-size: 15px;
+  color: var(--text);
+}
+
+#feedback.good { color: var(--green); }
+#feedback.bad { color: #fa412d; }
+
 /* ---------- Side panel ---------- */
 
 .panel {
