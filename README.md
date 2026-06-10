@@ -28,6 +28,7 @@ python3 -m http.server 8420
 - **Engine lines & analysis board**: after the game, the top three engine continuations are shown for whatever position you're viewing (eval badge + figurine notation), and the board unlocks — click a line or move the pieces yourself to play out variations for either side, with lines and the eval bar following along
 - **Puzzles** (`puzzles.html`): 5,000 puzzles sampled from the [Lichess puzzle database](https://database.lichess.org/) (CC0) with real Glicko-2 difficulty ratings (435–2922), full solution lines, and theme tags, with chess.com-style solving — animated setup move, correct/wrong feedback, auto-replying defense, two-stage hints, a difficulty selector, and a persistent Elo-style rating, streak, and solved count
 - **Puzzle Rush**: a 5-minute survival run — puzzles ramp up in difficulty, three strikes ends it, best score saved
+- **Openings trainer** (`openings.html`): all 3,726 named openings from the [lichess opening book](https://github.com/lichess-org/chess-openings) (CC0) — move pieces or search to identify any opening by name and ECO code, see every named continuation as a figurine line, replay book lines, and practice them from memory with feedback and hints
 
 ## How it works
 
@@ -46,6 +47,8 @@ python3 -m http.server 8420
 | `import-puzzles.js` | Alternative source: classifies bare FEN collections (e.g. yacpdb) as mate-in-1/2/3 with the exact solver. |
 | `gen-puzzles.js` | Alternative source: plays semi-random games and keeps positions where the exact mate solver finds a unique forced mate. |
 | `test-puzzles.js` | Re-verifies every puzzle: solvable, unique solution, no faster mate. Run `jsc chess-engine.js puzzles-data.js test-puzzles.js`. |
+| `openings.html` / `openings.js` | Openings explorer & trainer: detection, continuation lines, replay, practice mode. |
+| `openings-data.js` | 3,726 named openings from [lichess-org/chess-openings](https://github.com/lichess-org/chess-openings) (CC0), converted to UCI and engine-validated by `convert-openings.js`. |
 
 ## Tests
 
