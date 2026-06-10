@@ -96,12 +96,23 @@
 
   /* ---------------- Move handling ---------------- */
 
+  const uciOf = m => E.sqToAlg(m.from) + E.sqToAlg(m.to) + (m.promotion ? m.promotion.toLowerCase() : '');
+
+  // The first move must be the composition's key move (or an immediate mate);
+  // checking arbitrary quiet first moves to full depth is too slow. Later
+  // moves are validated live with the exact solver — any forced mate counts.
+  function isCorrect(m) {
+    if (E.forcesMate(st, m, 1)) return true;
+    if (remaining === puzzle.mateIn * 2 - 1) return uciOf(m) === puzzle.best;
+    return E.forcesMate(st, m, remaining, true);
+  }
+
   function applyUserMove(m) {
     busy = true;
     pending = null;
     promoEl.hidden = true;
     const prevSt = st, prevLegal = legal, prevLast = lastMove;
-    const ok = E.forcesMate(st, m, remaining);
+    const ok = isCorrect(m);
     st = E.makeMove(st, m);
     legal = E.legalMoves(st);
     lastMove = m;
@@ -351,10 +362,9 @@
     onMistake();
     if (!hintMove) {
       if (remaining === puzzle.mateIn * 2 - 1) {
-        hintMove = legal.find(m =>
-          E.sqToAlg(m.from) + E.sqToAlg(m.to) + (m.promotion ? m.promotion.toLowerCase() : '') === puzzle.best);
+        hintMove = legal.find(m => uciOf(m) === puzzle.best);
       }
-      if (!hintMove) hintMove = E.mateMoves(st, remaining, true)[0];
+      if (!hintMove) hintMove = E.mateMoves(st, remaining, true, true)[0];
     }
     hintStage++;
     marks = hintStage === 1

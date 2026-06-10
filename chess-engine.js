@@ -322,24 +322,26 @@
   }
 
   /* ---------------- Forced-mate solving (for puzzles) ----------------
-     Exact (not heuristic) detection of forced mates of the classic puzzle
-     shape: every attacking move gives check until the final mate. `plies`
-     counts total half-moves including the defender's (mate in 2 = 3 plies). */
+     Exact (not heuristic) detection of forced mates. `plies` counts total
+     half-moves including the defender's (mate in 2 = 3 plies). By default
+     only check-giving continuations are considered (fast, the classic
+     tactic shape); pass quiet=true to allow quiet moves too, as composed
+     problems require — slower, so keep plies small at runtime. */
 
   // Does move `m` force mate within `plies` half-moves (m being the first)?
-  function forcesMate(state, m, plies) {
+  function forcesMate(state, m, plies, quiet) {
     const next = makeMove(state, m);
     const replies = legalMoves(next);
     if (!replies.length) return inCheck(next); // checkmate yes, stalemate no
-    if (plies < 3 || !inCheck(next)) return false;
-    return replies.every(r => mateMoves(makeMove(next, r), plies - 2, true).length > 0);
+    if (plies < 3 || (!quiet && !inCheck(next))) return false;
+    return replies.every(r => mateMoves(makeMove(next, r), plies - 2, true, quiet).length > 0);
   }
 
   // All moves that force mate within `plies` half-moves.
-  function mateMoves(state, plies, firstOnly) {
+  function mateMoves(state, plies, firstOnly, quiet) {
     const out = [];
     for (const m of legalMoves(state)) {
-      if (forcesMate(state, m, plies)) {
+      if (forcesMate(state, m, plies, quiet)) {
         out.push(m);
         if (firstOnly) break;
       }

@@ -23,7 +23,7 @@ python3 -m http.server 8420
 - **Evaluation bar**: a chess.com-analysis-style bar beside the board showing who's winning, driven by a shallow engine search
 - **Game clocks**: 1 / 3 / 5 / 10 / 30 minute controls, or untimed
 - **Move list** in standard algebraic notation, captured-piece trays with material count, move sounds, board flip, undo
-- **Puzzles** (`puzzles.html`): 90 engine-generated, engine-verified mate-in-1/2/3 puzzles with chess.com-style solving — correct/wrong feedback, auto-replying defense, two-stage hints, and a persistent Elo-style rating, streak, and solved count
+- **Puzzles** (`puzzles.html`): 200 engine-verified mate-in-1/2/3 puzzles mined from the [432k-chess-puzzles](https://github.com/rebeccaloran/432k-chess-puzzles) collection (composed problems from [yacpdb.org](https://www.yacpdb.org/)), with chess.com-style solving — correct/wrong feedback, auto-replying defense, two-stage hints, and a persistent Elo-style rating, streak, and solved count
 
 ## How it works
 
@@ -34,8 +34,9 @@ python3 -m http.server 8420
 | `style.css` / `index.html` | Layout and chess.com-style theming. Pieces are Unicode glyphs — no images. |
 | `test-perft.js` | Verification: [perft](https://www.chessprogramming.org/Perft) node counts for 5 standard positions plus rule spot-checks. |
 | `puzzles.html` / `puzzles.js` | Puzzle mode: solve flow, hints, rating, auto-replying defense. |
-| `puzzles-data.js` | Generated puzzle set. Regenerate with `jsc chess-engine.js gen-puzzles.js > puzzles-data.js`. |
-| `gen-puzzles.js` | Puzzle generator: plays semi-random games and keeps positions where the exact mate solver finds a unique forced mate. |
+| `puzzles-data.js` | Puzzle set mined from [432k-chess-puzzles](https://github.com/rebeccaloran/432k-chess-puzzles) (yacpdb.org positions), solved and verified by the engine. |
+| `import-puzzles.js` | Puzzle importer: classifies bare FEN positions as mate-in-1/2/3 with the exact solver and keeps verified ones. Run `jsc chess-engine.js <candidates.js> import-puzzles.js > puzzles-data.js`. |
+| `gen-puzzles.js` | Alternative puzzle source: plays semi-random games and keeps positions where the exact mate solver finds a unique forced mate. |
 | `test-puzzles.js` | Re-verifies every puzzle: solvable, unique solution, no faster mate. Run `jsc chess-engine.js puzzles-data.js test-puzzles.js`. |
 
 ## Tests
