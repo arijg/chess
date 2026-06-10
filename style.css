@@ -125,9 +125,9 @@ main {
   left: 0;
   right: 0;
   bottom: 0;
-  height: 50%;
+  height: var(--fill, 50%);
   background: #f0f0f0;
-  transition: height .5s ease;
+  transition: height .5s ease, width .5s ease;
 }
 
 #evalbar.flipped #eval-white {
@@ -145,6 +145,12 @@ main {
   font-variant-numeric: tabular-nums;
   pointer-events: none;
 }
+
+/* The label sits at the leading side's end of the bar. */
+#evalbar.white-leads #eval-label { bottom: 3px; top: auto; color: #57544f; }
+#evalbar:not(.white-leads) #eval-label { top: 3px; bottom: auto; color: #e8e6e3; }
+#evalbar.flipped.white-leads #eval-label { top: 3px; bottom: auto; }
+#evalbar.flipped:not(.white-leads) #eval-label { bottom: 3px; top: auto; }
 
 #board-wrap {
   position: relative;
@@ -684,7 +690,16 @@ main {
   color: var(--text-bright);
 }
 
-.actions { display: flex; gap: 8px; }
+.actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap; /* five buttons wrap to a second row instead of overflowing */
+}
+
+.actions .btn {
+  flex: 1 1 30%;
+  min-width: 0;
+}
 
 .btn {
   flex: 1;
@@ -712,4 +727,48 @@ main {
 @media (max-width: 1020px) {
   .panel { width: min(674px, 94vw); max-height: none; }
   #moves { max-height: 200px; }
+}
+
+/* ---------- Mobile: full-width board, horizontal eval bar below it ---------- */
+
+@media (max-width: 600px) {
+  main { padding: 10px 0 16px; gap: 12px; }
+  .board-col { width: 100%; }
+  .player-bar { padding: 0 10px; }
+  #board { border-radius: 0; }
+
+  .board-row { flex-direction: column; gap: 6px; }
+
+  #evalbar {
+    order: 2; /* below the board */
+    width: auto;
+    height: 14px;
+    margin: 0 10px;
+  }
+
+  #eval-white {
+    top: 0;
+    bottom: 0;
+    right: auto;
+    height: auto;
+    width: var(--fill, 50%);
+  }
+
+  #evalbar.flipped #eval-white {
+    left: auto;
+    right: 0;
+    top: 0;
+    bottom: 0;
+  }
+
+  #eval-label {
+    display: flex;
+    align-items: center;
+    width: auto;
+  }
+
+  #evalbar.white-leads #eval-label { left: 5px; right: auto; top: 0; bottom: 0; }
+  #evalbar:not(.white-leads) #eval-label { right: 5px; left: auto; top: 0; bottom: 0; }
+  #evalbar.flipped.white-leads #eval-label { right: 5px; left: auto; top: 0; bottom: 0; }
+  #evalbar.flipped:not(.white-leads) #eval-label { left: 5px; right: auto; top: 0; bottom: 0; }
 }

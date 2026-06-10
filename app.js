@@ -886,7 +886,6 @@
   function renderEvalBar(cp) {
     lastEval = cp;
     const bar = $('evalbar');
-    const fill = $('eval-white');
     const label = $('eval-label');
     bar.classList.toggle('flipped', flipped);
 
@@ -903,13 +902,10 @@
       frac = Math.min(0.95, Math.max(0.05, frac));
       text = Math.abs(cp / 100).toFixed(1);
     }
-    fill.style.height = (frac * 100) + '%';
-
-    const whiteLeads = frac >= 0.5;
-    const atBottom = whiteLeads === !flipped; // label sits at the leading side's end
-    label.style.top = atBottom ? 'auto' : '3px';
-    label.style.bottom = atBottom ? '3px' : 'auto';
-    label.style.color = whiteLeads ? '#57544f' : '#e8e6e3';
+    // CSS maps --fill to height (vertical bar) or width (horizontal on
+    // mobile), and places the label at the leading side's end.
+    bar.style.setProperty('--fill', (frac * 100) + '%');
+    bar.classList.toggle('white-leads', frac >= 0.5);
     label.textContent = text;
   }
 
