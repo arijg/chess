@@ -6,6 +6,16 @@
   const E = ChessEngine;
   const VALUES = { P: 1, N: 3, B: 3, R: 5, Q: 9 };
   const pieceClass = p => 'pc-' + E.colorOf(p) + E.typeOf(p);
+  const uciOfMove = m => E.sqToAlg(m.from) + E.sqToAlg(m.to) + (m.promotion ? m.promotion.toLowerCase() : '');
+  const fullFen = s => E.fenKey(s) + ' ' + s.halfmove + ' ' + s.fullmove;
+
+  // Difficulty tiers backed by the lazy-loaded Stockfish WASM engine.
+  const SF_LEVELS = {
+    sf1400: { label: 'Stockfish 1400', elo: 1400, movetime: 400 },
+    sf1800: { label: 'Stockfish 1800', elo: 1800, movetime: 600 },
+    sf2200: { label: 'Stockfish 2200', elo: 2200, movetime: 800 },
+    sfmax: { label: 'Stockfish Max', movetime: 1200 },
+  };
 
   const $ = id => document.getElementById(id);
   const boardEl = $('board');
@@ -21,7 +31,7 @@
   let analysis = null; // { evals[], anns[], best{}, progress, complete }
   let flipped = false;
   let gen = 0; // generation counter: invalidates queued work after new game/undo
-  const settings = { mode: 'two', human: 'w', depth: 2, minutes: 10, autoQueen: false };
+  const settings = { mode: 'two', human: 'w', depth: '2', minutes: 10, autoQueen: false };
   let clocks = null, clockTimer = null, lastTick = 0;
   let squareEls = [];
 
@@ -112,9 +122,28 @@
     aiThinking = true;
     renderStatus();
     const myGen = gen;
+    const sf = SF_LEVELS[settings.depth];
+    if (sf) {
+      Stockfish.go({ moves: moveLog.map(x => uciOfMove(x.m)) }, { elo: sf.elo, movetime: sf.movetime })
+        .then(r => {
+          if (myGen !== gen) return;
+          aiThinking = false;
+          const m = r.best ? currentLegal.find(x => uciOfMove(x) === r.best) : null;
+          if (m && !gameOver) applyMove(m, true);
+          else renderStatus();
+        })
+        .catch(() => {
+          if (myGen !== gen) return; // engine unavailable: local fallback
+          aiThinking = false;
+          const m = E.bestMove(cur(), 3);
+          if (m && !gameOver) applyMove(m, true);
+          else renderStatus();
+        });
+      return;
+    }
     setTimeout(() => {
       if (myGen !== gen) return; // game was reset/undone while waiting
-      const m = E.bestMove(cur(), settings.depth);
+      const m = E.bestMove(cur(), +settings.depth);
       aiThinking = false;
       if (m && !gameOver) applyMove(m, true);
       else renderStatus();
@@ -194,21 +223,62 @@
     analysis = {
       evals: new Array(states.length).fill(null),
       anns: new Array(moveLog.length).fill(null),
-      best: {}, progress: 0, complete: false,
+      best: {}, bestUci: {}, progress: 0, complete: false,
+      engine: 'Stockfish',
     };
     const myGen = gen;
     renderGraph();
-    const step = () => {
-      if (myGen !== gen || !analysis) return;
-      const i = analysis.progress;
-      if (i >= states.length) { finishAnalysis(); return; }
-      analysis.evals[i] = E.evaluatePosition(states[i], 2);
+    renderStatus();
+    Stockfish.init().then(
+      () => sfAnalyzeStep(myGen),
+      () => { analysis.engine = 'built-in engine'; localAnalyzeStep(myGen); }
+    );
+  }
+
+  function sfAnalyzeStep(myGen) {
+    if (myGen !== gen || !analysis) return;
+    const i = analysis.progress;
+    if (i >= states.length) { finishAnalysis(); return; }
+    const st = states[i];
+    if (!E.legalMoves(st).length) { // terminal position: nothing to search
+      analysis.evals[i] = E.evaluatePosition(st, 1);
       analysis.progress++;
       renderGraph();
       renderStatus();
-      setTimeout(step, 0);
-    };
-    step();
+      sfAnalyzeStep(myGen);
+      return;
+    }
+    Stockfish.go({ fen: fullFen(st) }, { depth: 12 }).then(r => {
+      if (myGen !== gen || !analysis) return;
+      let cp = 0;
+      if (r.score) {
+        cp = r.score.type === 'mate'
+          ? (r.score.value > 0 ? 1 : -1) * 100000
+          : r.score.value;
+        if (st.turn === 'b') cp = -cp; // UCI scores are from the side to move
+      }
+      analysis.evals[i] = cp;
+      if (r.best && i < moveLog.length) analysis.bestUci[i] = r.best;
+      analysis.progress++;
+      renderGraph();
+      renderStatus();
+      sfAnalyzeStep(myGen);
+    }, () => {
+      if (myGen !== gen || !analysis) return;
+      analysis.engine = 'built-in engine';
+      localAnalyzeStep(myGen);
+    });
+  }
+
+  function localAnalyzeStep(myGen) {
+    if (myGen !== gen || !analysis) return;
+    const i = analysis.progress;
+    if (i >= states.length) { finishAnalysis(); return; }
+    if (analysis.evals[i] === null) analysis.evals[i] = E.evaluatePosition(states[i], 2);
+    analysis.progress++;
+    renderGraph();
+    renderStatus();
+    setTimeout(() => localAnalyzeStep(myGen), 0);
   }
 
   function finishAnalysis() {
@@ -219,7 +289,9 @@
       const drop = j % 2 === 0 ? before - after : after - before; // from the mover's view
       analysis.anns[j] = drop >= 250 ? '??' : drop >= 120 ? '?' : drop >= 60 ? '?!' : null;
       if (analysis.anns[j] === '??' || analysis.anns[j] === '?') {
-        const bm = E.bestMove(states[j], 2);
+        const u = analysis.bestUci[j];
+        let bm = u ? E.legalMoves(states[j]).find(x => uciOfMove(x) === u) : null;
+        if (!bm) bm = E.bestMove(states[j], 2);
         if (bm) analysis.best[j] = E.san(states[j], bm);
       }
     }
@@ -586,9 +658,9 @@
 
   function playerName(color) {
     if (settings.mode === 'ai') {
-      return color === settings.human
-        ? 'You'
-        : 'Computer (' + ['', 'Easy', 'Medium', 'Hard'][settings.depth] + ')';
+      if (color === settings.human) return 'You';
+      const sf = SF_LEVELS[settings.depth];
+      return sf ? sf.label : 'Computer (' + ({ 1: 'Easy', 2: 'Medium', 3: 'Hard' })[settings.depth] + ')';
     }
     return color === 'w' ? 'White' : 'Black';
   }
@@ -667,7 +739,7 @@
     $('hint').hidden = !!gameOver;
     $('analyze').hidden = !gameOver;
     if (analysis && !analysis.complete) {
-      el.textContent = 'Analyzing… ' + analysis.progress + '/' + states.length;
+      el.textContent = 'Analyzing with ' + analysis.engine + '… ' + analysis.progress + '/' + states.length;
       return;
     }
     if (!isLive()) {
@@ -685,7 +757,9 @@
       const [a, b] = resultText(gameOver);
       el.textContent = a + ' — ' + b;
     } else if (aiThinking) {
-      el.textContent = 'Computer is thinking…' + (premove ? ' (premove set)' : '');
+      const sf = SF_LEVELS[settings.depth];
+      el.textContent = (sf && !Stockfish.isReady() ? 'Loading Stockfish…' : 'Computer is thinking…')
+        + (premove ? ' (premove set)' : '');
     } else {
       el.textContent = (cur().turn === 'w' ? 'White' : 'Black') + ' to move'
         + (E.inCheck(cur()) ? ' — check!' : '');
@@ -777,7 +851,9 @@
     newGame();
   });
   $('diff').addEventListener('change', e => {
-    settings.depth = +e.target.value;
+    settings.depth = e.target.value;
+    // Warm the engine while the player makes their move.
+    if (SF_LEVELS[settings.depth]) Stockfish.init().catch(() => {});
     renderPlayers();
   });
   $('time').addEventListener('change', e => {

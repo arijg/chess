@@ -18,13 +18,13 @@ python3 -m http.server 8420
 ## Features
 
 - **Full rules**: castling, en passant, promotion (with picker), check, checkmate, stalemate, 50-move rule, threefold repetition, insufficient material
-- **Two modes**: two players on one board, or vs a built-in computer opponent (Easy / Medium / Hard)
+- **Two modes**: two players on one board, or vs a computer opponent — Easy / Medium / Hard use the built-in engine, and four Stockfish tiers (1400 / 1800 / 2200 / Max) lazy-load a real Stockfish 18 running in WebAssembly, entirely in the browser
 - **chess.com-style UI**: green board, drag & drop or click-to-move, legal-move dots, last-move and check highlights, coordinates, animated piece slides, premoves (vs the computer), and an auto-queen option
 - **Evaluation bar**: a chess.com-analysis-style bar beside the board showing who's winning, driven by a shallow engine search
 - **Game clocks**: 1 / 3 / 5 / 10 / 30 minute controls, or untimed
 - **Move list** in standard algebraic notation, captured-piece trays with material count, move sounds, board flip, undo
 - **History navigation**: click any move, use the arrow keys, or the ⏮◀▶⏭ buttons to replay the game
-- **Post-game analysis**: a clickable evaluation graph, blunder/mistake/inaccuracy annotations on the move list, and "better was…" suggestions, computed by the engine in the browser
+- **Post-game analysis**: a clickable evaluation graph, blunder/mistake/inaccuracy annotations on the move list, and "better was…" suggestions — analyzed by Stockfish when available, with the built-in engine as a fallback
 - **Puzzles** (`puzzles.html`): 5,000 puzzles sampled from the [Lichess puzzle database](https://database.lichess.org/) (CC0) with real Glicko-2 difficulty ratings (435–2922), full solution lines, and theme tags, with chess.com-style solving — animated setup move, correct/wrong feedback, auto-replying defense, two-stage hints, a difficulty selector, and a persistent Elo-style rating, streak, and solved count
 - **Puzzle Rush**: a 5-minute survival run — puzzles ramp up in difficulty, three strikes ends it, best score saved
 
@@ -36,6 +36,8 @@ python3 -m http.server 8420
 | `app.js` | UI: board rendering, pointer-event drag & drop, clocks, move list, promotion picker, WebAudio sounds. |
 | `style.css` / `index.html` | Layout and chess.com-style theming. |
 | `pieces/` | Piece images: the [Cburnett chess set](https://commons.wikimedia.org/wiki/Category:SVG_chess_pieces) by Colin M. L. Burnett (BSD license), via Wikimedia Commons. |
+| `stockfish-engine.js` | Lazy-loading promise-based wrapper around the Stockfish worker (UCI plumbing, strength limiting, search requests). |
+| `vendor/stockfish/` | [Stockfish 18](https://stockfishchess.org/) lite single-threaded WASM build from [stockfish.js](https://github.com/nmrugg/stockfish.js), GPLv3 (see `vendor/stockfish/Copying.txt`). Loaded on demand only when a Stockfish difficulty or Analyze is used. |
 | `test-perft.js` | Verification: [perft](https://www.chessprogramming.org/Perft) node counts for 5 standard positions plus rule spot-checks. |
 | `puzzles.html` / `puzzles.js` | Puzzle mode: solve flow, hints, rating, auto-replying defense. |
 | `puzzles-data.js` | 5,000 puzzles sampled from the [Lichess puzzle database](https://database.lichess.org/) (CC0): real ratings, solution lines, themes. Stratified across eight rating bands with per-band quality thresholds (popularity and play count, relaxed at the extremes), every line re-validated move-by-move by the engine. |
