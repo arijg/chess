@@ -29,6 +29,7 @@
   let viewPly = null; // null = live; otherwise index into states[] being viewed
   let premove = null, premoveSel = null; // queued move for the human while the AI thinks
   let analysis = null; // { evals[], anns[], best{}, progress, complete }
+  let explore = null; // analysis-board variation: { basePly, states[], log: [{m, san}] }
   let flipped = false;
   let gen = 0; // generation counter: invalidates queued work after new game/undo
   const settings = { mode: 'two', human: 'w', depth: '2', minutes: 10, autoQueen: false };
@@ -38,6 +39,7 @@
   const cur = () => states[states.length - 1];
   const isLive = () => viewPly === null;
   const viewState = () => isLive() ? cur() : states[viewPly];
+  const activeState = () => explore ? explore.states[explore.states.length - 1] : viewState();
   const isHumanTurn = () => settings.mode === 'two' || cur().turn === settings.human;
   const isAITurn = () => settings.mode === 'ai' && cur().turn !== settings.human && !gameOver;
 
@@ -50,7 +52,7 @@
     fenCounts = new Map([[E.fenKey(states[0]), 1]]);
     currentLegal = E.legalMoves(cur());
     selected = null; gameOver = null; pending = null; aiThinking = false; hint = null;
-    viewPly = null; premove = null; premoveSel = null; analysis = null;
+    viewPly = null; premove = null; premoveSel = null; analysis = null; explore = null;
     flipped = settings.mode === 'ai' && settings.human === 'b';
     promoEl.hidden = true;
     gameoverEl.hidden = true;
@@ -67,6 +69,7 @@
     buildBoard();
     renderAll();
     updateEval();
+    updateLines();
     if (isAITurn()) scheduleAI();
   }
 
@@ -173,21 +176,23 @@
     gameOver = null;
     selected = null;
     hint = null;
-    viewPly = null; premove = null; premoveSel = null; analysis = null;
+    viewPly = null; premove = null; premoveSel = null; analysis = null; explore = null;
     gameoverEl.hidden = true;
     currentLegal = E.legalMoves(cur());
     // If we undid past a flag fall, give that side a little time back.
     if (clocks && clocks[cur().turn] <= 0) clocks[cur().turn] = 15000;
     renderAll();
     updateEval();
+    updateLines();
     if (isAITurn()) scheduleAI();
   }
 
   /* ---------------- History navigation ---------------- */
 
   function setView(p) {
+    if (explore) { explore = null; selected = null; }
     const target = (p === null || p >= states.length - 1) ? null : Math.max(0, p);
-    if (target === viewPly) return;
+    if (target === viewPly) { renderBoard(); renderStatus(); updateLines(); return; }
     const prevIdx = isLive() ? states.length - 1 : viewPly;
     viewPly = target;
     selected = null; hint = null;
@@ -196,6 +201,7 @@
     renderStatus();
     renderGraph();
     updateEval();
+    updateLines();
     const newIdx = isLive() ? states.length - 1 : viewPly;
     if (newIdx === prevIdx + 1) animateMove(moveLog[newIdx - 1].m, false);
     else if (newIdx === prevIdx - 1) animateMove(moveLog[newIdx].m, true);
@@ -206,12 +212,17 @@
   window.addEventListener('keydown', e => {
     const tag = document.activeElement && document.activeElement.tagName;
     if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
-    if (e.key === 'ArrowLeft') { navRel(-1); e.preventDefault(); }
-    else if (e.key === 'ArrowRight') { navRel(1); e.preventDefault(); }
-    else if (e.key === 'ArrowUp') { setView(0); e.preventDefault(); }
+    if (e.key === 'ArrowLeft') {
+      if (explore) exploreBack(); else navRel(-1);
+      e.preventDefault();
+    } else if (e.key === 'ArrowRight') {
+      if (!explore) navRel(1);
+      e.preventDefault();
+    } else if (e.key === 'ArrowUp') { setView(0); e.preventDefault(); }
     else if (e.key === 'ArrowDown') { setView(null); e.preventDefault(); }
-    else if (e.key === 'Escape' && (premove || premoveSel !== null)) {
-      premove = null; premoveSel = null; renderBoard();
+    else if (e.key === 'Escape') {
+      if (explore) exitExplore();
+      else if (premove || premoveSel !== null) { premove = null; premoveSel = null; renderBoard(); }
     }
   });
 
@@ -223,7 +234,7 @@
     analysis = {
       evals: new Array(states.length).fill(null),
       anns: new Array(moveLog.length).fill(null),
-      best: {}, bestUci: {}, progress: 0, complete: false,
+      best: {}, bestUci: {}, gap: {}, progress: 0, complete: false,
       engine: 'Stockfish',
     };
     const myGen = gen;
@@ -248,7 +259,7 @@
       sfAnalyzeStep(myGen);
       return;
     }
-    Stockfish.go({ fen: fullFen(st) }, { depth: 12 }).then(r => {
+    Stockfish.go({ fen: fullFen(st) }, { depth: 12, multiPV: 2 }).then(r => {
       if (myGen !== gen || !analysis) return;
       let cp = 0;
       if (r.score) {
@@ -258,7 +269,15 @@
         if (st.turn === 'b') cp = -cp; // UCI scores are from the side to move
       }
       analysis.evals[i] = cp;
-      if (r.best && i < moveLog.length) analysis.bestUci[i] = r.best;
+      if (r.best && i < moveLog.length) {
+        analysis.bestUci[i] = r.best;
+        // Gap between the best and second-best move (mover's perspective):
+        // a huge gap means the best move was the only good one.
+        const toCp = ln => ln.type === 'mate' ? (ln.value > 0 ? 1 : -1) * 10000 : ln.value;
+        analysis.gap[i] = r.lines && r.lines.length >= 2
+          ? Math.max(0, toCp(r.lines[0]) - toCp(r.lines[1]))
+          : 0;
+      }
       analysis.progress++;
       renderGraph();
       renderStatus();
@@ -275,6 +294,13 @@
     const i = analysis.progress;
     if (i >= states.length) { finishAnalysis(); return; }
     if (analysis.evals[i] === null) analysis.evals[i] = E.evaluatePosition(states[i], 2);
+    if (i < moveLog.length && !analysis.bestUci[i]) {
+      const tops = E.topMoves(states[i], 2, 2);
+      if (tops.length) {
+        analysis.bestUci[i] = uciOfMove(tops[0].m);
+        analysis.gap[i] = tops.length > 1 ? Math.max(0, tops[0].score - tops[1].score) : 0;
+      }
+    }
     analysis.progress++;
     renderGraph();
     renderStatus();
@@ -284,6 +310,13 @@
   function finishAnalysis() {
     const clamp = v => Math.max(-1500, Math.min(1500, v));
     for (let j = 0; j < moveLog.length; j++) {
+      // Played the engine's top move: Best (★), or Great (!) when it was
+      // the only good move (the runner-up loses 250+ centipawns).
+      if (analysis.bestUci[j] && uciOfMove(moveLog[j].m) === analysis.bestUci[j]) {
+        analysis.anns[j] = (analysis.gap[j] || 0) >= 250 && E.legalMoves(states[j]).length > 1
+          ? '!' : '★';
+        continue;
+      }
       const before = clamp(analysis.evals[j]);
       const after = clamp(analysis.evals[j + 1]);
       const drop = j % 2 === 0 ? before - after : after - before; // from the mover's view
@@ -322,6 +355,97 @@
       + '<line x1="' + mx.toFixed(1) + '" y1="0" x2="' + mx.toFixed(1) + '" y2="' + H + '" stroke="#ffffff66"/>'
       + '</svg>';
   }
+
+  /* ---------------- Engine lines panel (top continuations) ---------------- */
+
+  const FIGS = {
+    w: { K: '♔', Q: '♕', R: '♖', B: '♗', N: '♘' },
+    b: { K: '♚', Q: '♛', R: '♜', B: '♝', N: '♞' },
+  };
+  const figurine = (san, color) => san.replace(/[KQRBN]/g, ch => FIGS[color][ch]);
+
+  function fmtLineEval(cpWhite, mate) {
+    if (mate !== null) return (mate > 0 ? '+M' : '−M') + Math.abs(mate);
+    return (cpWhite >= 0 ? '+' : '−') + Math.abs(cpWhite / 100).toFixed(2);
+  }
+
+  // Numbered figurine SAN for a UCI line starting from `st0`.
+  function lineToSan(st0, pv, maxPlies) {
+    let s = st0;
+    const parts = [];
+    for (let i = 0; i < Math.min(pv.length, maxPlies); i++) {
+      const m = E.legalMoves(s).find(x => uciOfMove(x) === pv[i]);
+      if (!m) break;
+      const prefix = s.turn === 'w' ? s.fullmove + '. ' : (i === 0 ? s.fullmove + '… ' : '');
+      parts.push(prefix + figurine(E.san(s, m), s.turn));
+      s = E.makeMove(s, m);
+    }
+    return parts.join(' ');
+  }
+
+  function updateLines() {
+    const panel = $('engine-lines');
+    if (!gameOver) { panel.hidden = true; return; }
+    panel.hidden = false;
+    const stA = activeState();
+    const seq = ++updateLines.seq;
+    if (!E.legalMoves(stA).length) {
+      panel.innerHTML = '<div class="line-row line-loading">'
+        + (E.inCheck(stA) ? 'Checkmate.' : 'Stalemate.') + '</div>';
+      return;
+    }
+    panel.innerHTML = '<div class="line-row line-loading">Engine lines…</div>';
+    Stockfish.go({ fen: fullFen(stA) }, { depth: 13, multiPV: 3 }).then(r => {
+      if (seq !== updateLines.seq) return;
+      renderLines(stA, r.lines && r.lines.length ? r.lines : (r.score ? [r.score] : []));
+    }, () => {
+      if (seq !== updateLines.seq) return;
+      // Stockfish unavailable: shallow top-3 from the built-in engine.
+      const lines = E.topMoves(stA, 2, 3).map(t => {
+        const pv = [uciOfMove(t.m)];
+        let s2 = E.makeMove(stA, t.m);
+        for (let k = 0; k < 3; k++) {
+          const bm = E.bestMove(s2, 2);
+          if (!bm) break;
+          pv.push(uciOfMove(bm));
+          s2 = E.makeMove(s2, bm);
+        }
+        return { type: 'cp', value: t.score, pv };
+      });
+      renderLines(stA, lines);
+    });
+  }
+  updateLines.seq = 0;
+
+  function renderLines(stA, lines) {
+    const panel = $('engine-lines');
+    if (!lines.length) { panel.innerHTML = '<div class="line-row line-loading">No line found.</div>'; return; }
+    panel.innerHTML = '';
+    for (const ln of lines) {
+      const sign = stA.turn === 'b' ? -1 : 1; // UCI scores are side-to-move
+      const mate = ln.type === 'mate' ? sign * ln.value : null;
+      const cpWhite = ln.type === 'cp' ? sign * ln.value : (mate > 0 ? 10000 : -10000);
+      const row = document.createElement('div');
+      row.className = 'line-row';
+      const badge = document.createElement('span');
+      badge.className = 'line-eval' + (cpWhite < 0 ? ' black-better' : '');
+      badge.textContent = fmtLineEval(ln.type === 'cp' ? cpWhite : 0, mate);
+      const movesSpan = document.createElement('span');
+      movesSpan.className = 'line-moves';
+      movesSpan.textContent = lineToSan(stA, ln.pv, 10);
+      row.appendChild(badge);
+      row.appendChild(movesSpan);
+      if (ln.pv.length) {
+        row.addEventListener('click', () => {
+          const m = E.legalMoves(activeState()).find(x => uciOfMove(x) === ln.pv[0]);
+          if (m) exploreMove(m, false);
+        });
+      }
+      panel.appendChild(row);
+    }
+  }
+
+  $('explore-exit').addEventListener('click', exitExplore);
 
   $('eval-graph-wrap').addEventListener('click', e => {
     if (!analysis || states.length < 2) return;
@@ -365,12 +489,19 @@
   const squareEl = sq => boardEl.querySelector('.square[data-sq="' + sq + '"]');
 
   function renderBoard() {
-    const st = viewState();
-    const live = isLive();
-    const lastIdx = live ? moveLog.length - 1 : viewPly - 1;
-    const last = lastIdx >= 0 ? moveLog[lastIdx].m : null;
+    const st = activeState();
+    const live = isLive() && !explore;
+    let last = null;
+    if (explore) {
+      last = explore.log.length ? explore.log[explore.log.length - 1].m : null;
+    } else {
+      const lastIdx = isLive() ? moveLog.length - 1 : viewPly - 1;
+      last = lastIdx >= 0 ? moveLog[lastIdx].m : null;
+    }
     const checkSq = E.inCheck(st) ? E.findKing(st.board, st.turn) : -1;
-    const targets = live && selected !== null ? currentLegal.filter(m => m.from === selected) : [];
+    // Once the game is over the board becomes a free analysis board.
+    const legalHere = gameOver ? E.legalMoves(st) : currentLegal;
+    const targets = selected !== null && (live || gameOver) ? legalHere.filter(m => m.from === selected) : [];
     const myColor = settings.mode === 'two' ? st.turn : settings.human;
 
     for (const el of squareEls) {
@@ -395,9 +526,10 @@
       if (live && premoveSel === sq) el.classList.add('premove');
       const t = targets.find(m => m.to === sq);
       if (t) el.classList.add(t.captured ? 'capture-hint' : 'move-hint');
-      if (live && p && !gameOver
-        && ((E.colorOf(p) === st.turn && isHumanTurn() && !aiThinking)
-          || (settings.mode === 'ai' && E.colorOf(p) === myColor && !isHumanTurn()))) {
+      if (p && (gameOver
+        ? E.colorOf(p) === st.turn
+        : live && ((E.colorOf(p) === st.turn && isHumanTurn() && !aiThinking)
+          || (settings.mode === 'ai' && E.colorOf(p) === myColor && !isHumanTurn())))) {
         el.classList.add('grabbable');
       }
     }
@@ -434,11 +566,87 @@
     }
   }
 
+  /* ---------------- Analysis-board exploration (after game over) ---------------- */
+
+  function exploreMove(m, viaDrag) {
+    if (!explore) {
+      explore = { basePly: isLive() ? states.length - 1 : viewPly, states: [activeState()], log: [] };
+    }
+    const st0 = explore.states[explore.states.length - 1];
+    const san = E.san(st0, m);
+    explore.states.push(E.makeMove(st0, m));
+    explore.log.push({ m, san });
+    selected = null; pending = null;
+    promoEl.hidden = true;
+    sound(m.captured ? 'capture' : 'move');
+    renderBoard();
+    if (!viaDrag) animateMove(m, false);
+    renderStatus();
+    updateEval();
+    updateLines();
+  }
+
+  function exploreTo(from, to, viaDrag) {
+    const candidates = E.legalMoves(activeState()).filter(m => m.from === from && m.to === to);
+    if (!candidates.length) return;
+    if (candidates[0].promotion) {
+      pending = { candidates, explore: true };
+      showPromotion(to);
+    } else {
+      exploreMove(candidates[0], viaDrag);
+    }
+  }
+
+  function exploreBack() {
+    if (!explore) return;
+    explore.states.pop();
+    const undone = explore.log.pop();
+    if (!explore.log.length) explore = null;
+    selected = null;
+    renderBoard();
+    if (undone) animateMove(undone.m, true);
+    renderStatus();
+    updateEval();
+    updateLines();
+  }
+
+  function exitExplore() {
+    if (!explore) return;
+    explore = null;
+    selected = null;
+    renderBoard();
+    renderStatus();
+    updateEval();
+    updateLines();
+  }
+
   /* ---------------- Input: click + drag + premove ---------------- */
 
   boardEl.addEventListener('pointerdown', e => {
     if (e.pointerType === 'mouse' && e.button !== 0) return;
-    if (gameOver || pending) return;
+    if (pending) return;
+    if (gameOver) {
+      // Free analysis board: play out lines for either side.
+      const sqEl = e.target.closest('.square');
+      if (!sqEl) return;
+      const sq = +sqEl.dataset.sq;
+      const st = activeState();
+      if (selected !== null && E.legalMoves(st).some(m => m.from === selected && m.to === sq)) {
+        exploreTo(selected, sq, false);
+        return;
+      }
+      const p = st.board[sq];
+      if (p && E.colorOf(p) === st.turn) {
+        const reclick = selected === sq;
+        selected = sq;
+        renderBoard();
+        startDrag(e, sq, reclick, 'explore');
+      } else if (selected !== null) {
+        selected = null;
+        renderBoard();
+      }
+      return;
+    }
     if (!isLive()) { setView(null); return; }
     const sqEl = e.target.closest('.square');
     if (!sqEl) return;
@@ -477,7 +685,7 @@
       if (p && E.colorOf(p) === settings.human) {
         premoveSel = sq;
         renderBoard();
-        startDrag(e, sq, false, true);
+        startDrag(e, sq, false, 'premove');
       } else if (premoveSel !== null || premove) {
         premoveSel = null; premove = null;
         renderBoard();
@@ -493,7 +701,7 @@
     }
   });
 
-  function startDrag(e, from, reclick, isPremove) {
+  function startDrag(e, from, reclick, kind) {
     const pieceEl = squareEl(from)?.querySelector('.piece');
     if (!pieceEl) return;
     const rect = pieceEl.getBoundingClientRect();
@@ -526,11 +734,20 @@
       const target = el && el.closest('.square');
       if (target) {
         const to = +target.dataset.sq;
-        if (isPremove) {
+        if (kind === 'premove') {
           if (to !== from) {
             premove = { from, to };
             premoveSel = null;
           }
+          renderBoard();
+          return;
+        }
+        if (kind === 'explore') {
+          if (to !== from && E.legalMoves(activeState()).some(m => m.from === from && m.to === to)) {
+            exploreTo(from, to, true);
+            return;
+          }
+          if (to === from && reclick && !moved) selected = null;
           renderBoard();
           return;
         }
@@ -569,14 +786,16 @@
   /* ---------------- Promotion picker ---------------- */
 
   function showPromotion(to) {
-    const color = cur().turn;
+    const color = activeState().turn;
     promoBox.innerHTML = '';
     for (const t of ['Q', 'N', 'R', 'B']) {
       const b = document.createElement('button');
       b.innerHTML = '<div class="promo-piece pc-' + color + t + '"></div>';
       b.addEventListener('click', ev => {
         ev.stopPropagation();
-        applyMove(pending.candidates.find(x => x.promotion === t), true);
+        const cand = pending.candidates.find(x => x.promotion === t);
+        if (pending.explore) exploreMove(cand, false);
+        else applyMove(cand, true);
       });
       promoBox.appendChild(b);
     }
@@ -615,10 +834,12 @@
   // Recompute the position score off the click path so the move renders first.
   function updateEval() {
     const seq = ++updateEval.seq;
-    const idx = isLive() ? states.length - 1 : viewPly;
-    if (analysis && analysis.evals[idx] != null) { renderEvalBar(analysis.evals[idx]); return; }
-    if (gameOver && isLive()) { renderEvalBar(lastEval); return; }
-    const stv = viewState();
+    if (!explore) {
+      const idx = isLive() ? states.length - 1 : viewPly;
+      if (analysis && analysis.evals[idx] != null) { renderEvalBar(analysis.evals[idx]); return; }
+      if (gameOver && isLive()) { renderEvalBar(lastEval); return; }
+    }
+    const stv = activeState();
     setTimeout(() => {
       if (seq !== updateEval.seq) return;
       renderEvalBar(E.evaluatePosition(stv, 2));
@@ -634,7 +855,7 @@
     bar.classList.toggle('flipped', flipped);
 
     let frac, text;
-    const pinResult = gameOver && isLive();
+    const pinResult = gameOver && isLive() && !explore;
     if (pinResult && gameOver.result === '1-0') { frac = 1; text = '1-0'; }
     else if (pinResult && gameOver.result === '0-1') { frac = 0; text = '0-1'; }
     else if (pinResult) { frac = 0.5; text = '½'; }
@@ -731,13 +952,25 @@
   }
 
   function annLabel(a) {
-    return a === '??' ? 'Blunder' : a === '?' ? 'Mistake' : 'Inaccuracy';
+    return a === '??' ? 'Blunder'
+      : a === '?' ? 'Mistake'
+      : a === '?!' ? 'Inaccuracy'
+      : a === '!' ? 'Great move — the only good one'
+      : 'Best move';
   }
 
   function renderStatus() {
     const el = $('status');
     $('hint').hidden = !!gameOver;
     $('analyze').hidden = !gameOver;
+    $('explore-exit').hidden = !explore;
+    if (explore) {
+      const st0 = explore.states[0];
+      const sans = explore.log.map(x => x.san);
+      const shown = sans.length > 6 ? '… ' + sans.slice(-6).join(' ') : sans.join(' ');
+      el.textContent = 'Variation: ' + st0.fullmove + (st0.turn === 'w' ? '. ' : '… ') + shown;
+      return;
+    }
     if (analysis && !analysis.complete) {
       el.textContent = 'Analyzing with ' + analysis.engine + '… ' + analysis.progress + '/' + states.length;
       return;
@@ -787,6 +1020,8 @@
           if (ann === '??') s.classList.add('ann-blunder');
           else if (ann === '?') s.classList.add('ann-mistake');
           else if (ann === '?!') s.classList.add('ann-inacc');
+          else if (ann === '!') s.classList.add('ann-great');
+          else if (ann === '★') s.classList.add('ann-best');
         }
         row.appendChild(s);
       }
@@ -811,6 +1046,7 @@
     $('go-title').textContent = title;
     $('go-sub').textContent = sub;
     gameoverEl.hidden = false;
+    updateLines();
   }
 
   /* ---------------- Sounds (WebAudio, no assets) ---------------- */

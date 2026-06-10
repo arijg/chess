@@ -516,6 +516,8 @@ main {
 .move-san.ann-blunder { color: #fa412d; }
 .move-san.ann-mistake { color: #ffa459; }
 .move-san.ann-inacc { color: #f0c15c; }
+.move-san.ann-great { color: #26c2a3; }
+.move-san.ann-best { color: var(--green); }
 
 .nav-btns { display: flex; gap: 6px; }
 
@@ -536,6 +538,54 @@ main {
   display: block;
   width: 100%;
   height: 64px;
+}
+
+#engine-lines {
+  background: var(--panel-2);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.line-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 10px;
+  font-size: 13.5px;
+  cursor: pointer;
+}
+
+.line-row + .line-row { border-top: 1px solid rgba(255, 255, 255, .05); }
+.line-row:hover { background: rgba(255, 255, 255, .05); }
+
+.line-eval {
+  background: #fff;
+  color: #1b1a18;
+  font-weight: 700;
+  border-radius: 4px;
+  padding: 2px 7px;
+  font-size: 12px;
+  min-width: 46px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.line-eval.black-better {
+  background: #403d39;
+  color: #fff;
+  border: 1px solid #55524e;
+}
+
+.line-moves {
+  color: var(--text-bright);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.line-loading {
+  color: #989795;
+  cursor: default;
 }
 
 .move-result {

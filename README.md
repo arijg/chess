@@ -25,6 +25,7 @@ python3 -m http.server 8420
 - **Move list** in standard algebraic notation, captured-piece trays with material count, move sounds, board flip, undo
 - **History navigation**: click any move, use the arrow keys, or the ⏮◀▶⏭ buttons to replay the game
 - **Post-game analysis**: a clickable evaluation graph, blunder/mistake/inaccuracy annotations on the move list, and "better was…" suggestions — analyzed by Stockfish when available, with the built-in engine as a fallback
+- **Engine lines & analysis board**: after the game, the top three engine continuations are shown for whatever position you're viewing (eval badge + figurine notation), and the board unlocks — click a line or move the pieces yourself to play out variations for either side, with lines and the eval bar following along
 - **Puzzles** (`puzzles.html`): 5,000 puzzles sampled from the [Lichess puzzle database](https://database.lichess.org/) (CC0) with real Glicko-2 difficulty ratings (435–2922), full solution lines, and theme tags, with chess.com-style solving — animated setup move, correct/wrong feedback, auto-replying defense, two-stage hints, a difficulty selector, and a persistent Elo-style rating, streak, and solved count
 - **Puzzle Rush**: a 5-minute survival run — puzzles ramp up in difficulty, three strikes ends it, best score saved
 
