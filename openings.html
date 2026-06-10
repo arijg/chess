@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Chess Openings</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main>
+    <section class="board-col">
+      <div id="board-wrap">
+        <div id="board"></div>
+        <div id="promo" hidden>
+          <div id="promo-box"></div>
+        </div>
+      </div>
+    </section>
+
+    <aside class="panel">
+      <h1>Openings</h1>
+      <nav class="nav">
+        <a href="index.html">Play</a>
+        <a href="puzzles.html">Puzzles</a>
+        <a class="active" href="openings.html">Openings</a>
+      </nav>
+      <div class="search-wrap">
+        <input id="search" type="text" placeholder="Search 3,726 openings — try “Sicilian”" autocomplete="off">
+        <div id="results" hidden></div>
+      </div>
+      <div id="opening-name">
+        <b id="opening-title">Starting position</b>
+        <span id="opening-eco"></span>
+      </div>
+      <div id="status"></div>
+      <div id="continuations"></div>
+      <div class="actions">
+        <button id="back" class="btn">◀ Back</button>
+        <button id="reset" class="btn">Reset</button>
+        <button id="practice" class="btn primary">Practice</button>
+      </div>
+      <div class="actions">
+        <button id="review" class="btn">Review</button>
+        <button id="play-sf" class="btn">▶ vs Stockfish</button>
+      </div>
+    </aside>
+  </main>
+
+  <script src="chess-engine.js"></script>
+  <script src="openings-data.js"></script>
+  <script src="openings.js"></script>
+</body>
+</html>
