@@ -14,8 +14,13 @@
         <span class="captured" id="cap-top"></span>
         <span class="clock" id="clock-top"></span>
       </div>
-      <div id="board-wrap">
-        <div id="board"></div>
+      <div class="board-row">
+        <div id="evalbar">
+          <div id="eval-white"></div>
+          <span id="eval-label"></span>
+        </div>
+        <div id="board-wrap">
+          <div id="board"></div>
         <div id="promo" hidden>
           <div id="promo-box"></div>
         </div>
@@ -28,6 +33,7 @@
               <button id="go-close" class="btn">View Board</button>
             </div>
           </div>
+        </div>
         </div>
       </div>
       <div class="player-bar">
@@ -80,7 +86,7 @@
     </aside>
   </main>
 
-  <script src="chess-engine.js"></script>
-  <script src="app.js"></script>
+  <script src="chess-engine.js?v=2"></script>
+  <script src="app.js?v=2"></script>
 </body>
 </html>

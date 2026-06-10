@@ -425,6 +425,17 @@
     return alpha;
   }
 
+  // Centipawns from White's perspective; |score| >= 100000 means forced mate found.
+  function evaluatePosition(state, depth = 2) {
+    const moves = legalMoves(state);
+    if (!moves.length) {
+      if (inCheck(state)) return state.turn === 'w' ? -100500 : 100500;
+      return 0;
+    }
+    const s = search(state, depth, -Infinity, Infinity);
+    return state.turn === 'w' ? s : -s;
+  }
+
   function bestMove(state, depth = 2) {
     const moves = legalMoves(state);
     if (!moves.length) return null;
@@ -439,7 +450,7 @@
 
   const ChessEngine = {
     FILES, initialState, loadFEN, legalMoves, makeMove, inCheck, gameStatus,
-    san, fenKey, perft, bestMove, insufficientMaterial,
+    san, fenKey, perft, bestMove, evaluatePosition, insufficientMaterial,
     sqToAlg, algToSq, colorOf, typeOf, findKing, attacked,
   };
 

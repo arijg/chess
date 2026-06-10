@@ -52,6 +52,7 @@
 
     buildBoard();
     renderAll();
+    updateEval();
     if (isAITurn()) scheduleAI();
   }
 
@@ -93,6 +94,7 @@
     else sound('move');
 
     renderAll();
+    updateEval();
     if (gameOver) showGameOver();
     else if (isAITurn()) scheduleAI();
   }
@@ -129,6 +131,7 @@
     // If we undid past a flag fall, give that side a little time back.
     if (clocks && clocks[cur().turn] <= 0) clocks[cur().turn] = 15000;
     renderAll();
+    updateEval();
     if (isAITurn()) scheduleAI();
   }
 
@@ -326,6 +329,52 @@
     renderClocks();
     renderStatus();
     renderMoves();
+    renderEvalBar(lastEval);
+  }
+
+  /* ---------------- Evaluation bar ---------------- */
+
+  let lastEval = 0;
+
+  // Recompute the position score off the click path so the move renders first.
+  function updateEval() {
+    const seq = ++updateEval.seq;
+    if (gameOver) { renderEvalBar(lastEval); return; }
+    const st = cur();
+    setTimeout(() => {
+      if (seq !== updateEval.seq) return;
+      renderEvalBar(E.evaluatePosition(st, 2));
+    }, 20);
+  }
+  updateEval.seq = 0;
+
+  function renderEvalBar(cp) {
+    lastEval = cp;
+    const bar = $('evalbar');
+    const fill = $('eval-white');
+    const label = $('eval-label');
+    bar.classList.toggle('flipped', flipped);
+
+    let frac, text;
+    if (gameOver && gameOver.result === '1-0') { frac = 1; text = '1-0'; }
+    else if (gameOver && gameOver.result === '0-1') { frac = 0; text = '0-1'; }
+    else if (gameOver) { frac = 0.5; text = '½'; }
+    else if (cp > 90000) { frac = 0.98; text = 'M'; }
+    else if (cp < -90000) { frac = 0.02; text = 'M'; }
+    else {
+      // Logistic curve: +300cp ≈ 73% of the bar, like chess.com's squashing.
+      frac = 1 / (1 + Math.exp(-cp / 300));
+      frac = Math.min(0.95, Math.max(0.05, frac));
+      text = Math.abs(cp / 100).toFixed(1);
+    }
+    fill.style.height = (frac * 100) + '%';
+
+    const whiteLeads = frac >= 0.5;
+    const atBottom = whiteLeads === !flipped; // label sits at the leading side's end
+    label.style.top = atBottom ? 'auto' : '3px';
+    label.style.bottom = atBottom ? '3px' : 'auto';
+    label.style.color = whiteLeads ? '#57544f' : '#e8e6e3';
+    label.textContent = text;
   }
 
   function playerName(color) {
@@ -355,9 +404,17 @@
     const capB = capturedBy(bottom), capT = capturedBy(top);
     const pts = c => c.reduce((s, p) => s + VALUES[E.typeOf(p)], 0);
     const diff = pts(capB) - pts(capT);
-    const html = (pieces, adv) =>
-      pieces.map(p => GLYPHS[E.typeOf(p)]).join('')
-      + (adv > 0 ? '<span class="adv">+' + adv + '</span>' : '');
+    // Same piece types huddle together; a gap separates different types.
+    const html = (pieces, adv) => {
+      const groups = [];
+      for (const p of pieces) {
+        const t = E.typeOf(p);
+        if (groups.length && groups[groups.length - 1].t === t) groups[groups.length - 1].n++;
+        else groups.push({ t, n: 1 });
+      }
+      return groups.map(g => '<span class="cap-group">' + GLYPHS[g.t].repeat(g.n) + '</span>').join('')
+        + (adv > 0 ? '<span class="adv">+' + adv + '</span>' : '');
+    };
     $('cap-bottom').innerHTML = html(capB, diff);
     $('cap-top').innerHTML = html(capT, -diff);
   }

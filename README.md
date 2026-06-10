@@ -20,6 +20,7 @@ python3 -m http.server 8420
 - **Full rules**: castling, en passant, promotion (with picker), check, checkmate, stalemate, 50-move rule, threefold repetition, insufficient material
 - **Two modes**: two players on one board, or vs a built-in computer opponent (Easy / Medium / Hard)
 - **chess.com-style UI**: green board, drag & drop or click-to-move, legal-move dots, last-move and check highlights, coordinates
+- **Evaluation bar**: a chess.com-analysis-style bar beside the board showing who's winning, driven by a shallow engine search
 - **Game clocks**: 1 / 3 / 5 / 10 / 30 minute controls, or untimed
 - **Move list** in standard algebraic notation, captured-piece trays with material count, move sounds, board flip, undo
 

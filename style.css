@@ -40,7 +40,9 @@ main {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  width: min(640px, 94vw, calc(100vh - 150px));
+  /* 34px wider than the board itself (eval bar 26px + gap 8px),
+     so the board keeps the same size it had before the bar existed. */
+  width: min(674px, 94vw, calc(100vh - 116px));
 }
 
 .player-bar {
@@ -57,16 +59,18 @@ main {
 }
 
 .captured {
-  font-size: 17px;
-  letter-spacing: -3px;
+  font-size: 19px;
   color: #9e9d9b;
   line-height: 1;
 }
 
+.cap-group {
+  letter-spacing: -2px; /* slight huddle within a same-type group */
+  margin-right: 8px;
+}
+
 .captured .adv {
   font-size: 12px;
-  letter-spacing: 0;
-  margin-left: 6px;
   color: #9e9d9b;
 }
 
@@ -90,16 +94,58 @@ main {
   color: #d33a2c;
 }
 
+.board-row {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+
+#evalbar {
+  position: relative;
+  width: 26px;
+  border-radius: 4px;
+  overflow: hidden;
+  background: #403d39; /* black's share of the bar */
+  box-shadow: 0 4px 18px rgba(0, 0, 0, .4);
+}
+
+#eval-white {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 50%;
+  background: #f0f0f0;
+  transition: height .5s ease;
+}
+
+#evalbar.flipped #eval-white {
+  bottom: auto;
+  top: 0;
+}
+
+#eval-label {
+  position: absolute;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-size: 9px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+
 #board-wrap {
   position: relative;
-  width: 100%;
+  flex: 1;
+  min-width: 0;
   aspect-ratio: 1;
 }
 
 #board {
   display: grid;
-  grid-template-columns: repeat(8, 1fr);
-  grid-template-rows: repeat(8, 1fr);
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  grid-template-rows: repeat(8, minmax(0, 1fr));
   width: 100%;
   height: 100%;
   border-radius: 5px;
@@ -167,7 +213,7 @@ main {
 .piece {
   position: relative;
   z-index: 2;
-  font-size: 10.6cqw;
+  font-size: 13.8cqw;
   line-height: 1;
   pointer-events: none;
 }
@@ -381,6 +427,6 @@ main {
 .btn.primary:hover { background: var(--green-hover); }
 
 @media (max-width: 1020px) {
-  .panel { width: min(640px, 94vw); max-height: none; }
+  .panel { width: min(674px, 94vw); max-height: none; }
   #moves { max-height: 200px; }
 }
