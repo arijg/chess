@@ -10,11 +10,16 @@
   const fullFen = s => E.fenKey(s) + ' ' + s.halfmove + ' ' + s.fullmove;
 
   // Difficulty tiers backed by the lazy-loaded Stockfish WASM engine.
+  // Internal Elo sits above the label's vibe because the engine's UCI_Elo
+  // scale is anchored to engine pools, which run below online human
+  // ratings; thinking time also scales up the ladder, as the calibration
+  // assumes a real time control.
   const SF_LEVELS = {
-    sf1400: { label: 'Stockfish 1400', elo: 1400, movetime: 400 },
-    sf1800: { label: 'Stockfish 1800', elo: 1800, movetime: 600 },
-    sf2200: { label: 'Stockfish 2200', elo: 2200, movetime: 800 },
-    sfmax: { label: 'Stockfish Max', movetime: 1200 },
+    sfcasual: { label: 'Casual (Stockfish)', elo: 1500, movetime: 500 },
+    sfclub: { label: 'Club (Stockfish)', elo: 2000, movetime: 1000 },
+    sfexpert: { label: 'Expert (Stockfish)', elo: 2400, movetime: 1500 },
+    sfmaster: { label: 'Master (Stockfish)', elo: 2900, movetime: 2000 },
+    sfmax: { label: 'Maximum (Stockfish)', movetime: 2500 },
   };
 
   const $ = id => document.getElementById(id);
@@ -1165,7 +1170,7 @@
   } catch (_) { /* ignore */ }
   if (handoff) {
     settings.mode = 'ai';
-    if (!SF_LEVELS[settings.depth]) settings.depth = 'sf1800';
+    if (!SF_LEVELS[settings.depth]) settings.depth = 'sfclub';
     $('mode').value = 'ai';
     $('diff').value = settings.depth;
     $('playas-wrap').hidden = false;
