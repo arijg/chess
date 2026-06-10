@@ -3,12 +3,8 @@
   'use strict';
 
   const E = ChessEngine;
-  // ︎ forces text (non-emoji) rendering of the glyphs.
-  const GLYPHS = {
-    K: '♚︎', Q: '♛︎', R: '♜︎',
-    B: '♝︎', N: '♞︎', P: '♟︎',
-  };
   const VALUES = { P: 1, N: 3, B: 3, R: 5, Q: 9 };
+  const pieceClass = p => 'pc-' + E.colorOf(p) + E.typeOf(p);
 
   const $ = id => document.getElementById(id);
   const boardEl = $('board');
@@ -186,8 +182,7 @@
           span = document.createElement('span');
           el.appendChild(span);
         }
-        span.className = 'piece ' + E.colorOf(p);
-        span.textContent = GLYPHS[E.typeOf(p)];
+        span.className = 'piece ' + pieceClass(p);
       } else if (span) span.remove();
 
       if (last && (sq === last.from || sq === last.to)) el.classList.add('hl');
@@ -233,7 +228,6 @@
     const rect = pieceEl.getBoundingClientRect();
     const ghost = pieceEl.cloneNode(true);
     ghost.classList.add('drag-ghost');
-    ghost.style.fontSize = getComputedStyle(pieceEl).fontSize;
     ghost.style.width = rect.width + 'px';
     ghost.style.height = rect.height + 'px';
     document.body.appendChild(ghost);
@@ -296,8 +290,7 @@
     promoBox.innerHTML = '';
     for (const t of ['Q', 'N', 'R', 'B']) {
       const b = document.createElement('button');
-      b.className = color;
-      b.textContent = GLYPHS[t];
+      b.innerHTML = '<div class="promo-piece pc-' + color + t + '"></div>';
       b.addEventListener('click', ev => {
         ev.stopPropagation();
         const m = pending.candidates.find(x => x.promotion === t);
@@ -408,11 +401,12 @@
     const html = (pieces, adv) => {
       const groups = [];
       for (const p of pieces) {
-        const t = E.typeOf(p);
-        if (groups.length && groups[groups.length - 1].t === t) groups[groups.length - 1].n++;
-        else groups.push({ t, n: 1 });
+        const cls = pieceClass(p);
+        if (groups.length && groups[groups.length - 1].cls === cls) groups[groups.length - 1].n++;
+        else groups.push({ cls, n: 1 });
       }
-      return groups.map(g => '<span class="cap-group">' + GLYPHS[g.t].repeat(g.n) + '</span>').join('')
+      return groups.map(g => '<span class="cap-group">'
+        + ('<span class="cap-piece ' + g.cls + '"></span>').repeat(g.n) + '</span>').join('')
         + (adv > 0 ? '<span class="adv">+' + adv + '</span>' : '');
     };
     $('cap-bottom').innerHTML = html(capB, diff);
