@@ -133,6 +133,81 @@
     return parts.join(' ') + (ucis.length > maxPlies ? ' …' : '');
   }
 
+  /* ---------------- Engine lines (optional, lazy-loads Stockfish) ---------------- */
+
+  const fullFen = s => E.fenKey(s) + ' ' + s.halfmove + ' ' + s.fullmove;
+
+  function fmtLineEval(cpWhite, mate) {
+    if (mate !== null) return (mate > 0 ? '+M' : '−M') + Math.abs(mate);
+    return (cpWhite >= 0 ? '+' : '−') + Math.abs(cpWhite / 100).toFixed(2);
+  }
+
+  function updateEngineLines() {
+    const panel = $('engine-lines');
+    const on = !!store.engineLines;
+    $('engine-toggle').textContent = 'Engine lines: ' + (on ? 'On' : 'Off');
+    if (!on || mode === 'practice') { panel.hidden = true; return; }
+    if (busy) return; // skip during autoplay; the final render triggers an update
+    panel.hidden = false;
+    const stA = st;
+    const seqId = ++updateEngineLines.seq;
+    if (!legal.length) {
+      panel.innerHTML = '<div class="line-row line-loading">'
+        + (E.inCheck(stA) ? 'Checkmate.' : 'Stalemate.') + '</div>';
+      return;
+    }
+    panel.innerHTML = '<div class="line-row line-loading">Engine lines…</div>';
+    Stockfish.go({ fen: fullFen(stA) }, { depth: 13, multiPV: 3 }).then(r => {
+      if (seqId !== updateEngineLines.seq) return;
+      renderEngineLines(stA, r.lines && r.lines.length ? r.lines : (r.score ? [r.score] : []));
+    }, () => {
+      if (seqId !== updateEngineLines.seq) return;
+      // Stockfish unavailable: shallow top-3 from the built-in engine.
+      const lines = E.topMoves(stA, 2, 3).map(t => {
+        const pv = [uciOf(t.m)];
+        let s2 = E.makeMove(stA, t.m);
+        for (let k = 0; k < 3; k++) {
+          const bm = E.bestMove(s2, 2);
+          if (!bm) break;
+          pv.push(uciOf(bm));
+          s2 = E.makeMove(s2, bm);
+        }
+        return { type: 'cp', value: t.score, pv };
+      });
+      renderEngineLines(stA, lines);
+    });
+  }
+  updateEngineLines.seq = 0;
+
+  function renderEngineLines(stA, lines) {
+    const panel = $('engine-lines');
+    if (!lines.length) { panel.innerHTML = '<div class="line-row line-loading">No line found.</div>'; return; }
+    panel.innerHTML = '';
+    for (const ln of lines) {
+      const sign = stA.turn === 'b' ? -1 : 1; // UCI scores are side-to-move
+      const mate = ln.type === 'mate' ? sign * ln.value : null;
+      const cpWhite = ln.type === 'cp' ? sign * ln.value : (mate > 0 ? 10000 : -10000);
+      const row = document.createElement('div');
+      row.className = 'line-row';
+      const badge = document.createElement('span');
+      badge.className = 'line-eval' + (cpWhite < 0 ? ' black-better' : '');
+      badge.textContent = fmtLineEval(ln.type === 'cp' ? cpWhite : 0, mate);
+      const movesSpan = document.createElement('span');
+      movesSpan.className = 'line-moves';
+      movesSpan.textContent = lineToSan(stA, ln.pv, 8);
+      row.appendChild(badge);
+      row.appendChild(movesSpan);
+      if (ln.pv.length) {
+        row.addEventListener('click', () => {
+          if (busy || mode === 'practice') return;
+          const m = findUci(ln.pv[0]);
+          if (m) { marks = {}; doUserMove(m, false); }
+        });
+      }
+      panel.appendChild(row);
+    }
+  }
+
   /* ---------------- Moves ---------------- */
 
   function findUci(u) {
@@ -340,6 +415,7 @@
         ? lineToSan(E.initialState(), seq, 99)
         : 'Move pieces or search an opening to explore.', '');
     }
+    updateEngineLines();
   }
 
   function setStatus(text, kind) {
@@ -612,6 +688,12 @@
   $('reset').addEventListener('click', () => { target = null; $('search').value = ''; reset(); });
   $('practice').addEventListener('click', startPractice);
   $('review').addEventListener('click', startReview);
+  $('engine-toggle').addEventListener('click', () => {
+    store.engineLines = !store.engineLines;
+    saveStore();
+    if (store.engineLines) Stockfish.init().catch(() => {});
+    updateEngineLines();
+  });
   $('play-sf').addEventListener('click', () => {
     // Hand the current position to the game page to play out vs Stockfish.
     try { localStorage.setItem('chess-handoff', JSON.stringify({ moves: seq, t: Date.now() })); } catch (_) { /* */ }

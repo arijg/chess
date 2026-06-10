@@ -78,6 +78,7 @@
     flipped = settings.mode === 'ai' && settings.human === 'b';
     promoEl.hidden = true;
     gameoverEl.hidden = true;
+    $('resign').textContent = 'Resign';
 
     clocks = settings.minutes > 0
       ? { w: settings.minutes * 60000, b: settings.minutes * 60000 }
@@ -978,6 +979,7 @@
     switch (go.reason) {
       case 'checkmate': return ['Checkmate', winner + ' wins'];
       case 'timeout': return ['Time’s up', winner + ' wins on time'];
+      case 'resignation': return ['Resignation', winner + ' wins'];
       case 'stalemate': return ['Draw', 'Stalemate'];
       case 'insufficient material': return ['Draw', 'Insufficient material'];
       case 'fifty-move rule': return ['Draw', '50-move rule'];
@@ -997,6 +999,7 @@
   function renderStatus() {
     const el = $('status');
     $('hint').hidden = !!gameOver;
+    $('resign').hidden = !!gameOver;
     $('analyze').hidden = !gameOver;
     $('explore-exit').hidden = !explore;
     if (explore) {
@@ -1145,6 +1148,29 @@
     renderAll();
   });
   $('undo').addEventListener('click', undo);
+  // Two-step resign: the first press arms the button for a few seconds.
+  let resignArmed = 0;
+  $('resign').addEventListener('click', () => {
+    if (gameOver || !moveLog.length) return;
+    const now = performance.now();
+    if (now - resignArmed > 3000) {
+      resignArmed = now;
+      $('resign').textContent = 'Sure?';
+      setTimeout(() => {
+        if (performance.now() - resignArmed >= 3000) $('resign').textContent = 'Resign';
+      }, 3200);
+      return;
+    }
+    resignArmed = 0;
+    $('resign').textContent = 'Resign';
+    const loser = settings.mode === 'ai' ? settings.human : cur().turn;
+    gameOver = { over: true, result: loser === 'w' ? '0-1' : '1-0', reason: 'resignation' };
+    premove = null; premoveSel = null; selected = null; hint = null;
+    sound('end');
+    renderAll();
+    updateEval();
+    showGameOver();
+  });
   $('hint').addEventListener('click', () => {
     if (gameOver || aiThinking || pending || !isHumanTurn() || !isLive()) return;
     if (!hint) {
