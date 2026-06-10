@@ -250,6 +250,7 @@
     if (analysis && analysis.complete) return;
     analysis = {
       evals: new Array(states.length).fill(null),
+      lines: new Array(states.length).fill(null), // top-3 engine lines per position
       anns: new Array(moveLog.length).fill(null),
       best: {}, bestUci: {}, gap: {}, progress: 0, complete: false,
       engine: 'Stockfish',
@@ -276,7 +277,7 @@
       sfAnalyzeStep(myGen);
       return;
     }
-    Stockfish.go({ fen: fullFen(st) }, { depth: 12, multiPV: 2 }).then(r => {
+    Stockfish.go({ fen: fullFen(st) }, { depth: 12, multiPV: 3 }).then(r => {
       if (myGen !== gen || !analysis) return;
       let cp = 0;
       if (r.score) {
@@ -286,6 +287,7 @@
         if (st.turn === 'b') cp = -cp; // UCI scores are from the side to move
       }
       analysis.evals[i] = cp;
+      if (r.lines && r.lines.length) analysis.lines[i] = r.lines;
       if (r.best && i < moveLog.length) {
         analysis.bestUci[i] = r.best;
         // Gap between the best and second-best move (mover's perspective):
@@ -295,6 +297,7 @@
           ? Math.max(0, toCp(r.lines[0]) - toCp(r.lines[1]))
           : 0;
       }
+      if (!explore && i === (isLive() ? states.length - 1 : viewPly)) updateLines();
       analysis.progress++;
       renderGraph();
       renderStatus();
@@ -349,6 +352,7 @@
     renderMoves();
     renderGraph();
     renderStatus();
+    updateLines();
   }
 
   function renderGraph() {
@@ -408,8 +412,17 @@
     const seq = ++updateLines.seq;
     if (!E.legalMoves(stA).length) {
       panel.innerHTML = '<div class="line-row line-loading">'
-        + (E.inCheck(stA) ? 'Checkmate.' : 'Stalemate.') + '</div>';
+        + (E.inCheck(stA) ? 'Checkmate' : 'Stalemate')
+        + ' — step back (←) for lines.</div>';
       return;
+    }
+    // Analysis already computed lines for this position: show them instantly.
+    if (!explore) {
+      const idx = isLive() ? states.length - 1 : viewPly;
+      if (analysis && analysis.lines && analysis.lines[idx] && analysis.lines[idx].length) {
+        renderLines(stA, analysis.lines[idx]);
+        return;
+      }
     }
     panel.innerHTML = '<div class="line-row line-loading">Engine lines…</div>';
     Stockfish.go({ fen: fullFen(stA) }, { depth: 13, multiPV: 3 }).then(r => {
