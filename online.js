@@ -9,12 +9,26 @@
   const E = ChessEngine;
   const pieceClass = p => 'pc-' + E.colorOf(p) + E.typeOf(p);
 
-  // The relay to connect to. Locally we use the Python/Node dev relay on
-  // :8421; in production set this to your deployed relay (see server/README.md).
+  // The relay to connect to, in priority order:
+  //   1. ?relay=wss://... in the URL (persisted, handy for testing a deploy)
+  //   2. the committed production relay below — set this after deploying
+  //      server/cloudflare (see server/cloudflare/README.md)
+  //   3. ws://localhost:8421 when developing locally
   const PLACEHOLDER = 'wss://YOUR-RELAY-HOST';
-  const RELAY_URL = (location.hostname === 'localhost' || location.hostname === '127.0.0.1')
-    ? 'ws://' + location.hostname + ':8421'
-    : PLACEHOLDER;
+  const PROD_RELAY = PLACEHOLDER; // <-- replace with wss://chess-relay.<you>.workers.dev
+  function resolveRelay() {
+    try {
+      const q = new URLSearchParams(location.search).get('relay');
+      if (q) { localStorage.setItem('chess-relay-url', q); return q; }
+      const saved = localStorage.getItem('chess-relay-url');
+      if (saved) return saved;
+    } catch (_) { /* ignore */ }
+    if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
+      return 'ws://' + location.hostname + ':8421';
+    }
+    return PROD_RELAY;
+  }
+  const RELAY_URL = resolveRelay();
 
   const $ = id => document.getElementById(id);
   const boardEl = $('board');
@@ -244,7 +258,12 @@
     settings.hostColor = $('host-color').value;
     settings.minutes = +$('host-time').value;
     const id = newId();
-    const link = location.origin + location.pathname + '?g=' + id;
+    let link = location.origin + location.pathname + '?g=' + id;
+    // If a relay override is active (testing a deploy), pass it to the friend too.
+    try {
+      const override = localStorage.getItem('chess-relay-url');
+      if (override) link += '&relay=' + encodeURIComponent(override);
+    } catch (_) { /* ignore */ }
     $('share-link').value = link;
     $('share').hidden = false;
     $('create').disabled = true;

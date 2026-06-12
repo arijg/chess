@@ -24,7 +24,13 @@ localhost.
 
 ## Deploy
 
-### Render (simplest)
+**Recommended: Cloudflare Workers** — no cold starts and a generous free
+plan. It uses a Worker + Durable Object instead of this `ws` server (same
+wire protocol), with a full step-by-step in [`cloudflare/README.md`](cloudflare/README.md).
+
+The `ws` server in this folder is for hosts that run a plain Node process:
+
+### Render (simplest Node host)
 1. Push this repo to GitHub.
 2. New → **Web Service**, point it at the repo, set **Root Directory** to
    `server`.
