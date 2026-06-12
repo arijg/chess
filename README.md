@@ -32,6 +32,7 @@ python3 -m http.server 8420
 - **Endgame trainer** (`endgames.html`): twelve classic technique drills (queen/rook/two-bishop/bishop-and-knight mates, the two-rook ladder, king-and-pawn wins and draws, Lucena, Philidor, queen-vs-rook, the outside passed pawn, and the wrong-bishop draw) played against the full-strength engine, with tips, hints, and persistent completion
 - **PGN export & import**: copy any game out as PGN (with a `FEN` header for games that didn't start from the standard position), or paste one in to load and analyze it — comments, NAGs, and variations are handled
 - **Game accuracy report**: after analysis, per-player accuracy percentages and a tally of best/great/inaccuracy/mistake/blunder moves
+- **Online play** (`online.html`): create a game, send a friend the link, and play over a tiny WebSocket relay (`server/`) — every move validated on both ends, with synced clocks, resign, draw offers, and rematch
 - **Quality-of-life**: the game in progress survives reloads, puzzles filter by theme, and the whole site is an installable PWA that works fully offline (including Stockfish and all 5,000 puzzles)
 
 ## How it works
@@ -53,6 +54,9 @@ python3 -m http.server 8420
 | `test-puzzles.js` | Re-verifies every puzzle: solvable, unique solution, no faster mate. Run `jsc chess-engine.js puzzles-data.js test-puzzles.js`. |
 | `openings.html` / `openings.js` | Openings explorer & trainer: detection, continuation lines, replay, practice mode. |
 | `endgames.html` / `endgames.js` | Endgame trainer: engine-verified drill positions played against the full-strength engine. |
+| `online.html` / `online.js` | Online play: connection, host/guest handshake, turn-gated board, clocks, resign/draw/rematch. |
+| `online-core.js` / `test-online.js` | Pure online game state machine (turn-gating, move validation, game-over) and its headless tests. |
+| `server/` | WebSocket relay (`server.js`, Node) plus deploy docs and a Python dev relay; see `server/README.md`. |
 | `sw.js` / `manifest.webmanifest` | PWA: offline cache (stale-while-revalidate) and install metadata. |
 | `ci-runner.js` / `.github/workflows/` | CI: runs all test suites in Node on every push and pull request. |
 | `openings-data.js` | 3,726 named openings from [lichess-org/chess-openings](https://github.com/lichess-org/chess-openings) (CC0), converted to UCI and engine-validated by `convert-openings.js`. |
