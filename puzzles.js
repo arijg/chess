@@ -52,8 +52,10 @@
   function pickPuzzle() {
     const band = BANDS[store.difficulty];
     const inBand = p => !band || (p.rating >= band[0] && p.rating < band[1]);
-    let pool = PUZZLES.filter(p => !store.done[p.id] && inBand(p));
-    if (!pool.length) pool = PUZZLES.filter(inBand); // band exhausted: allow repeats
+    const inTheme = p => !store.theme || p.themes.includes(store.theme);
+    let pool = PUZZLES.filter(p => !store.done[p.id] && inBand(p) && inTheme(p));
+    if (!pool.length) pool = PUZZLES.filter(p => inBand(p) && inTheme(p)); // exhausted: allow repeats
+    if (!pool.length) pool = PUZZLES.filter(inTheme); // band+theme combo empty: drop the band
     if (!pool.length) pool = PUZZLES.slice();
     if (band) return pool[Math.floor(Math.random() * pool.length)];
     const target = store.rating + (Math.random() * 300 - 150);
@@ -441,6 +443,7 @@
     $('hint').hidden = true;
     $('next').hidden = true;
     $('difficulty-wrap').hidden = true;
+    $('theme-wrap').hidden = true;
     loadPuzzle(pickRushPuzzle());
   }
 
@@ -489,6 +492,7 @@
     $('hint').hidden = false;
     $('next').hidden = false;
     $('difficulty-wrap').hidden = false;
+    $('theme-wrap').hidden = false;
     loadPuzzle();
   }
 
@@ -552,6 +556,27 @@
     store.difficulty = e.target.value;
     saveStore();
     loadPuzzle(); // settings change, not a skip — no rating penalty
+  });
+
+  // Theme filter, built from the tags present in the puzzle set.
+  (function buildThemeFilter() {
+    const counts = {};
+    for (const p of PUZZLES) for (const t of p.themes) counts[t] = (counts[t] || 0) + 1;
+    const pretty = t => t.replace(/([A-Z])/g, ' $1').replace(/(\d+)/g, ' $1')
+      .replace(/^./, c => c.toUpperCase()).replace(/\s+/g, ' ').trim();
+    const sel = $('theme');
+    sel.innerHTML = '<option value="">All themes</option>' + Object.entries(counts)
+      .filter(([, c]) => c >= 40)
+      .sort((a, b) => b[1] - a[1])
+      .map(([t, c]) => '<option value="' + t + '">' + pretty(t) + ' (' + c + ')</option>')
+      .join('');
+    sel.value = store.theme || '';
+    if (sel.value !== (store.theme || '')) sel.value = ''; // stored theme no longer exists
+  })();
+  $('theme').addEventListener('change', e => {
+    store.theme = e.target.value;
+    saveStore();
+    loadPuzzle();
   });
 
   /* ---------------- Sounds (WebAudio, no assets) ---------------- */
