@@ -3,7 +3,7 @@
    site works fully offline and updates in the background. */
 'use strict';
 
-const CACHE = 'chess-v1';
+const CACHE = 'chess-v2';
 
 const PRECACHE = [
   './',

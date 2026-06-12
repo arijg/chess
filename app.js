@@ -1038,6 +1038,7 @@
       case 'checkmate': return ['Checkmate', winner + ' wins'];
       case 'timeout': return ['Time’s up', winner + ' wins on time'];
       case 'resignation': return ['Resignation', winner + ' wins'];
+      case 'import': return ['Imported game', winner ? winner + ' won' : 'Drawn'];
       case 'stalemate': return ['Draw', 'Stalemate'];
       case 'insufficient material': return ['Draw', 'Insufficient material'];
       case 'fifty-move rule': return ['Draw', '50-move rule'];
@@ -1247,6 +1248,106 @@
     }
     renderBoard();
   });
+  /* ---------------- PGN export & import ---------------- */
+
+  function buildPgn() {
+    const custom = E.fenKey(states[0]) !== E.fenKey(E.initialState());
+    const result = gameOver ? gameOver.result : '*';
+    const d = new Date();
+    const pad = n => String(n).padStart(2, '0');
+    const headers = [
+      '[Event "Live game"]',
+      '[Site "arijg.github.io/chess"]',
+      '[Date "' + d.getFullYear() + '.' + pad(d.getMonth() + 1) + '.' + pad(d.getDate()) + '"]',
+      '[White "' + playerName('w') + '"]',
+      '[Black "' + playerName('b') + '"]',
+      '[Result "' + result + '"]',
+    ];
+    if (custom) {
+      headers.push('[SetUp "1"]');
+      headers.push('[FEN "' + fullFen(states[0]) + '"]');
+    }
+    let body = '';
+    for (let j = 0; j < moveLog.length; j++) {
+      if (states[j].turn === 'w') body += states[j].fullmove + '. ';
+      else if (j === 0) body += states[j].fullmove + '... ';
+      body += moveLog[j].san + ' ';
+    }
+    return headers.join('\n') + '\n\n' + (body + result).trim() + '\n';
+  }
+
+  // Returns {error} on failure; on success the game is replaced.
+  function importPgn(text) {
+    const headers = {};
+    for (const m of text.matchAll(/\[(\w+)\s+"([^"]*)"\]/g)) headers[m[1]] = m[2];
+    let body = text.replace(/\[(\w+)\s+"([^"]*)"\]/g, ' ').replace(/\{[^}]*\}/g, ' ');
+    let prev;
+    do { prev = body; body = body.replace(/\([^()]*\)/g, ' '); } while (body !== prev); // variations
+    body = body.replace(/\$\d+/g, ' ').replace(/\d+\.(\.\.)?/g, ' '); // NAGs, move numbers
+    const tokens = body.split(/\s+/).filter(t => t && !/^(1-0|0-1|1\/2-1\/2|\*|\.+)$/.test(t));
+    const strip = s => s.replace(/[+#!?]+$/, '');
+    let st;
+    try {
+      st = headers.FEN ? E.loadFEN(headers.FEN) : E.initialState();
+    } catch (_) {
+      return { error: 'unreadable FEN header' };
+    }
+    const ucis = [];
+    for (const tok of tokens) {
+      const legalHere = E.legalMoves(st);
+      let m = legalHere.find(x => E.san(st, x) === tok);
+      if (!m) m = legalHere.find(x => strip(E.san(st, x)) === strip(tok));
+      if (!m) return { error: 'could not read move ' + (ucis.length + 1) + ' ("' + tok + '")' };
+      ucis.push(uciOfMove(m));
+      st = E.makeMove(st, m);
+    }
+    if (!ucis.length) return { error: 'no moves found' };
+    settings.mode = 'two'; // imported games load for review on a neutral board
+    $('mode').value = 'two';
+    $('playas-wrap').hidden = true;
+    $('diff-wrap').hidden = true;
+    newGame({ fen: headers.FEN || undefined, moves: ucis, restore: true });
+    const status = E.gameStatus(cur(), fenCounts);
+    if (status.over) gameOver = status;
+    else if (headers.Result && headers.Result !== '*') {
+      gameOver = { over: true, result: headers.Result, reason: 'import' };
+    }
+    if (gameOver) {
+      saveGame(); // a finished import shouldn't persist as "in progress"
+      renderAll();
+      updateEval();
+      updateLines();
+    }
+    return {};
+  }
+
+  $('pgn-btn').addEventListener('click', () => {
+    $('pgn-text').value = buildPgn();
+    $('pgn-note').textContent = 'Loading a PGN replaces the current game. Finished games can be analyzed right away.';
+    $('pgn').hidden = false;
+  });
+  $('pgn-close').addEventListener('click', () => { $('pgn').hidden = true; });
+  $('pgn').addEventListener('click', e => { if (e.target === e.currentTarget) $('pgn').hidden = true; });
+  $('pgn-copy').addEventListener('click', () => {
+    const ta = $('pgn-text');
+    const done = () => { $('pgn-note').textContent = 'Copied to clipboard.'; };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(ta.value).then(done, () => { ta.select(); document.execCommand('copy'); done(); });
+    } else {
+      ta.select();
+      document.execCommand('copy');
+      done();
+    }
+  });
+  $('pgn-load').addEventListener('click', () => {
+    const r = importPgn($('pgn-text').value);
+    if (r.error) {
+      $('pgn-note').textContent = '✗ ' + r.error;
+      return;
+    }
+    $('pgn').hidden = true;
+  });
+
   $('nav-start').addEventListener('click', () => setView(0));
   $('nav-back').addEventListener('click', () => navRel(-1));
   $('nav-fwd').addEventListener('click', () => navRel(1));
