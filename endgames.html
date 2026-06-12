@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Chess Endgames</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#312e2b">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+</head>
+<body>
+  <main>
+    <section class="board-col">
+      <div id="board-wrap">
+        <div id="board"></div>
+        <div id="promo" hidden>
+          <div id="promo-box"></div>
+        </div>
+      </div>
+    </section>
+
+    <aside class="panel">
+      <h1>Endgames</h1>
+      <nav class="nav">
+        <a href="index.html">Play</a>
+        <a href="puzzles.html">Puzzles</a>
+        <a href="openings.html">Openings</a>
+        <a class="active" href="endgames.html">Endgames</a>
+      </nav>
+      <div id="drills"></div>
+      <div id="status"></div>
+      <div id="tip" hidden></div>
+      <div class="actions">
+        <button id="undo" class="btn">Undo</button>
+        <button id="hint" class="btn">Hint</button>
+        <button id="retry" class="btn primary">Retry</button>
+      </div>
+    </aside>
+  </main>
+
+  <script src="chess-engine.js"></script>
+  <script src="stockfish-engine.js"></script>
+  <script src="endgames-data.js"></script>
+  <script src="endgames.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
+  </script>
+</body>
+</html>

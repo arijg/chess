@@ -5,6 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Chess</title>
   <link rel="stylesheet" href="style.css">
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#312e2b">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
 </head>
 <body>
   <main>
@@ -50,6 +53,7 @@
         <a class="active" href="index.html">Play</a>
         <a href="puzzles.html">Puzzles</a>
         <a href="openings.html">Openings</a>
+        <a href="endgames.html">Endgames</a>
       </nav>
       <div class="controls">
         <label>Mode
@@ -97,6 +101,7 @@
       <div id="eval-graph-wrap" hidden>
         <div id="eval-graph"></div>
       </div>
+      <div id="acc-report" hidden></div>
       <div id="engine-lines" hidden></div>
       <div id="moves"></div>
       <div class="nav-btns">
@@ -120,5 +125,8 @@
   <script src="chess-engine.js?v=2"></script>
   <script src="stockfish-engine.js"></script>
   <script src="app.js?v=2"></script>
+  <script>
+    if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
+  </script>
 </body>
 </html>

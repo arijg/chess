@@ -5,6 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Chess Puzzles</title>
   <link rel="stylesheet" href="style.css">
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#312e2b">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
 </head>
 <body>
   <main>
@@ -23,13 +26,14 @@
         <a href="index.html">Play</a>
         <a class="active" href="puzzles.html">Puzzles</a>
         <a href="openings.html">Openings</a>
+        <a href="endgames.html">Endgames</a>
       </nav>
       <div class="stats">
         <div class="stat"><b id="rating"></b><span id="rating-label">Rating</span></div>
         <div class="stat"><b id="streak"></b><span id="streak-label">Streak</span></div>
         <div class="stat"><b id="solved-count"></b><span id="solved-label">Solved</span></div>
       </div>
-      <div class="controls controls-full">
+      <div class="controls">
         <label id="difficulty-wrap">Difficulty
           <select id="difficulty">
             <option value="auto">Auto — match my rating</option>
@@ -39,6 +43,9 @@
             <option value="expert">Expert (1800+)</option>
           </select>
         </label>
+        <label id="theme-wrap">Theme
+          <select id="theme"></select>
+        </label>
       </div>
       <div id="status"></div>
       <div id="feedback"></div>
@@ -47,6 +54,7 @@
         <button id="next" class="btn primary">Skip →</button>
         <button id="rush" class="btn">⚡ Rush</button>
         <button id="rush-exit" class="btn" hidden>Exit Rush</button>
+        <button id="playout" class="btn" hidden>▶ Play it out</button>
       </div>
     </aside>
   </main>
@@ -54,5 +62,8 @@
   <script src="chess-engine.js"></script>
   <script src="puzzles-data.js"></script>
   <script src="puzzles.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
+  </script>
 </body>
 </html>

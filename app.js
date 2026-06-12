@@ -41,6 +41,24 @@
   let clocks = null, clockTimer = null, lastTick = 0;
   let squareEls = [];
 
+  // The game in progress survives reloads; finished games are not kept.
+  const GAME_KEY = 'chess-game-v1';
+  function saveGame() {
+    try {
+      if (gameOver || !moveLog.length) { localStorage.removeItem(GAME_KEY); return; }
+      localStorage.setItem(GAME_KEY, JSON.stringify({
+        fen: fullFen(states[0]),
+        moves: moveLog.map(x => uciOfMove(x.m)),
+        settings: {
+          mode: settings.mode, human: settings.human, depth: settings.depth,
+          minutes: settings.minutes, autoQueen: settings.autoQueen,
+        },
+        clocks,
+        t: Date.now(),
+      }));
+    } catch (_) { /* private mode */ }
+  }
+
   const cur = () => states[states.length - 1];
   const isLive = () => viewPly === null;
   const viewState = () => isLive() ? cur() : states[viewPly];
@@ -53,7 +71,8 @@
   function newGame(opts) {
     const handoff = opts && Array.isArray(opts.moves) ? opts : null; // also called from click handlers
     gen++;
-    states = [E.initialState()];
+    // Games can start from an arbitrary position (puzzle play-outs, restores).
+    states = [handoff && handoff.fen ? E.loadFEN(handoff.fen) : E.initialState()];
     moveLog = [];
     fenCounts = new Map([[E.fenKey(states[0]), 1]]);
     currentLegal = E.legalMoves(cur());
@@ -72,8 +91,13 @@
         fenCounts.set(key, (fenCounts.get(key) || 0) + 1);
         currentLegal = E.legalMoves(next);
       }
-      settings.human = cur().turn; // the player continues from the book position
-      $('playas').value = settings.human;
+      if (handoff.human) {
+        settings.human = handoff.human; // puzzle play-out: keep the solver's color
+        $('playas').value = settings.human;
+      } else if (!handoff.restore) {
+        settings.human = cur().turn; // the player continues from the book position
+        $('playas').value = settings.human;
+      }
     }
     flipped = settings.mode === 'ai' && settings.human === 'b';
     promoEl.hidden = true;
@@ -83,6 +107,7 @@
     clocks = settings.minutes > 0
       ? { w: settings.minutes * 60000, b: settings.minutes * 60000 }
       : null;
+    if (handoff && handoff.restore && handoff.clocks && clocks) clocks = handoff.clocks;
     if (clockTimer) clearInterval(clockTimer);
     if (clocks) {
       lastTick = performance.now();
@@ -93,6 +118,7 @@
     renderAll();
     updateEval();
     updateLines();
+    saveGame();
     if (isAITurn()) scheduleAI();
   }
 
@@ -135,6 +161,7 @@
 
     renderAll();
     updateEval();
+    saveGame();
     if (animate && isLive()) animateMove(m, false);
     if (gameOver) { showGameOver(); return; }
     if (isAITurn()) scheduleAI();
@@ -150,7 +177,7 @@
     const myGen = gen;
     const sf = SF_LEVELS[settings.depth];
     if (sf) {
-      Stockfish.go({ moves: moveLog.map(x => uciOfMove(x.m)) }, { elo: sf.elo, movetime: sf.movetime })
+      Stockfish.go({ fen: fullFen(states[0]), moves: moveLog.map(x => uciOfMove(x.m)) }, { elo: sf.elo, movetime: sf.movetime })
         .then(r => {
           if (myGen !== gen) return;
           aiThinking = false;
@@ -207,6 +234,7 @@
     renderAll();
     updateEval();
     updateLines();
+    saveGame();
     if (isAITurn()) scheduleAI();
   }
 
@@ -345,7 +373,7 @@
       }
       const before = clamp(analysis.evals[j]);
       const after = clamp(analysis.evals[j + 1]);
-      const drop = j % 2 === 0 ? before - after : after - before; // from the mover's view
+      const drop = states[j].turn === 'w' ? before - after : after - before; // from the mover's view
       analysis.anns[j] = drop >= 250 ? '??' : drop >= 120 ? '?' : drop >= 60 ? '?!' : null;
       if (analysis.anns[j] === '??' || analysis.anns[j] === '?') {
         const u = analysis.bestUci[j];
@@ -357,13 +385,48 @@
     analysis.complete = true;
     renderMoves();
     renderGraph();
+    renderReport();
     renderStatus();
     updateLines();
   }
 
+  // Per-player accuracy (win-probability based) and move-quality tallies.
+  function renderReport() {
+    const el = $('acc-report');
+    if (!analysis || !analysis.complete || !moveLog.length) { el.hidden = true; return; }
+    const clamp = v => Math.max(-1500, Math.min(1500, v));
+    const winPct = cp => 50 + 50 * (2 / (1 + Math.exp(-0.00368208 * clamp(cp))) - 1);
+    const accs = { w: [], b: [] };
+    const tally = { w: {}, b: {} };
+    for (let j = 0; j < moveLog.length; j++) {
+      const mover = states[j].turn;
+      const before = winPct(analysis.evals[j]);
+      const after = winPct(analysis.evals[j + 1]);
+      const drop = Math.max(0, mover === 'w' ? before - after : after - before);
+      accs[mover].push(Math.max(0, Math.min(100, 103.1668 * Math.exp(-0.04354 * drop) - 3.1669)));
+      const ann = analysis.anns[j];
+      if (ann) tally[mover][ann] = (tally[mover][ann] || 0) + 1;
+    }
+    const avg = a => a.length ? (a.reduce((s, x) => s + x, 0) / a.length).toFixed(1) : '—';
+    const ROWS = [
+      ['★', 'Best', 'ann-best'], ['!', 'Great', 'ann-great'], ['?!', 'Inaccuracy', 'ann-inacc'],
+      ['?', 'Mistake', 'ann-mistake'], ['??', 'Blunder', 'ann-blunder'],
+    ];
+    let html = '<div class="acc-row acc-head"><span>' + avg(accs.w) + '%</span><span>Accuracy</span><span>'
+      + avg(accs.b) + '%</span></div>';
+    for (const [sym, name, cls] of ROWS) {
+      const w = tally.w[sym] || 0, b = tally.b[sym] || 0;
+      if (!w && !b) continue;
+      html += '<div class="acc-row"><span>' + w + '</span><span class="' + cls + '">' + sym + ' ' + name
+        + '</span><span>' + b + '</span></div>';
+    }
+    el.innerHTML = html;
+    el.hidden = false;
+  }
+
   function renderGraph() {
     const wrap = $('eval-graph-wrap');
-    if (!analysis) { wrap.hidden = true; return; }
+    if (!analysis) { wrap.hidden = true; $('acc-report').hidden = true; return; }
     wrap.hidden = false;
     const W = 300, H = 64, n = states.length;
     const clamp = v => Math.max(-600, Math.min(600, v));
@@ -921,8 +984,7 @@
   function capturedBy(color) {
     const out = [];
     moveLog.forEach((e, i) => {
-      const mover = i % 2 === 0 ? 'w' : 'b';
-      if (mover === color && e.m.captured) out.push(e.m.captured);
+      if (states[i].turn === color && e.m.captured) out.push(e.m.captured);
     });
     return out.sort((a, b) => VALUES[E.typeOf(b)] - VALUES[E.typeOf(a)]);
   }
@@ -1012,7 +1074,7 @@
     if (!isLive()) {
       if (viewPly === 0) { el.textContent = 'Start position (→ to step forward)'; return; }
       const j = viewPly - 1;
-      let s = (Math.floor(j / 2) + 1) + (j % 2 === 0 ? '. ' : '… ') + moveLog[j].san;
+      let s = states[j].fullmove + (states[j].turn === 'w' ? '. ' : '… ') + moveLog[j].san;
       if (analysis && analysis.complete && analysis.anns[j]) {
         s += ' — ' + annLabel(analysis.anns[j]);
         if (analysis.best[j]) s += ' · better: ' + analysis.best[j];
@@ -1037,17 +1099,23 @@
     const el = $('moves');
     el.innerHTML = '';
     const viewedMoveIdx = isLive() ? moveLog.length - 1 : viewPly - 1;
-    for (let i = 0; i < moveLog.length; i += 2) {
+    // Games from an arbitrary position may start with Black to move; pad the
+    // first row and number rows from the base position's move counter.
+    const cells = states[0].turn === 'b' ? [-1] : [];
+    for (let j = 0; j < moveLog.length; j++) cells.push(j);
+    for (let i = 0; i < cells.length; i += 2) {
       const row = document.createElement('div');
       row.className = 'move-row';
       const num = document.createElement('span');
       num.className = 'move-num';
-      num.textContent = (i / 2 + 1) + '.';
+      num.textContent = (states[0].fullmove + i / 2) + '.';
       row.appendChild(num);
-      for (const j of [i, i + 1]) {
+      for (const j of [cells[i], cells[i + 1]]) {
         const s = document.createElement('span');
-        s.className = 'move-san' + (j === viewedMoveIdx ? ' current' : '');
-        if (moveLog[j]) {
+        s.className = 'move-san' + (j !== undefined && j >= 0 && j === viewedMoveIdx ? ' current' : '');
+        if (j === -1) {
+          s.textContent = '…';
+        } else if (j !== undefined && moveLog[j]) {
           const ann = analysis && analysis.complete ? analysis.anns[j] : null;
           s.textContent = moveLog[j].san + (ann || '');
           s.dataset.ply = j + 1;
@@ -1165,6 +1233,7 @@
     sound('end');
     renderAll();
     updateEval();
+    saveGame();
     showGameOver();
   });
   $('hint').addEventListener('click', () => {
@@ -1198,6 +1267,23 @@
     $('playas-wrap').hidden = false;
     $('diff-wrap').hidden = false;
     Stockfish.init().catch(() => {});
+  } else {
+    // Resume an unfinished game from a previous visit.
+    try {
+      const g = JSON.parse(localStorage.getItem(GAME_KEY) || 'null');
+      if (g && Array.isArray(g.moves) && g.moves.length) {
+        Object.assign(settings, g.settings || {});
+        $('mode').value = settings.mode;
+        $('playas-wrap').hidden = settings.mode !== 'ai';
+        $('diff-wrap').hidden = settings.mode !== 'ai';
+        $('playas').value = settings.human;
+        $('diff').value = String(settings.depth);
+        $('time').value = String(settings.minutes);
+        $('autoqueen').value = settings.autoQueen ? '1' : '0';
+        if (SF_LEVELS[settings.depth]) Stockfish.init().catch(() => {});
+        handoff = { fen: g.fen, moves: g.moves, restore: true, clocks: g.clocks };
+      }
+    } catch (_) { /* start fresh */ }
   }
   newGame(handoff);
 })();

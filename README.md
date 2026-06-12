@@ -29,6 +29,9 @@ python3 -m http.server 8420
 - **Puzzles** (`puzzles.html`): 5,000 puzzles sampled from the [Lichess puzzle database](https://database.lichess.org/) (CC0) with real Glicko-2 difficulty ratings (435–2922), full solution lines, and theme tags, with chess.com-style solving — animated setup move, correct/wrong feedback, auto-replying defense, two-stage hints, a difficulty selector, and a persistent Elo-style rating, streak, and solved count
 - **Puzzle Rush**: a 5-minute survival run — puzzles ramp up in difficulty, three strikes ends it, best score saved
 - **Openings trainer** (`openings.html`): all 3,726 named openings from the [lichess opening book](https://github.com/lichess-org/chess-openings) (CC0) — move pieces or search to identify any opening by name and ECO code, see every named continuation as a figurine line, replay book lines, and practice them from memory with feedback and hints
+- **Endgame trainer** (`endgames.html`): seven classic technique drills (queen/rook mates, the two-rook ladder, king-and-pawn wins and draws, Lucena, Philidor) played against the full-strength engine, with tips, hints, and persistent completion
+- **Game accuracy report**: after analysis, per-player accuracy percentages and a tally of best/great/inaccuracy/mistake/blunder moves
+- **Quality-of-life**: the game in progress survives reloads, puzzles filter by theme, and the whole site is an installable PWA that works fully offline (including Stockfish and all 5,000 puzzles)
 
 ## How it works
 
@@ -48,6 +51,9 @@ python3 -m http.server 8420
 | `gen-puzzles.js` | Alternative source: plays semi-random games and keeps positions where the exact mate solver finds a unique forced mate. |
 | `test-puzzles.js` | Re-verifies every puzzle: solvable, unique solution, no faster mate. Run `jsc chess-engine.js puzzles-data.js test-puzzles.js`. |
 | `openings.html` / `openings.js` | Openings explorer & trainer: detection, continuation lines, replay, practice mode. |
+| `endgames.html` / `endgames.js` | Endgame trainer: engine-verified drill positions played against the full-strength engine. |
+| `sw.js` / `manifest.webmanifest` | PWA: offline cache (stale-while-revalidate) and install metadata. |
+| `ci-runner.js` / `.github/workflows/` | CI: runs all test suites in Node on every push and pull request. |
 | `openings-data.js` | 3,726 named openings from [lichess-org/chess-openings](https://github.com/lichess-org/chess-openings) (CC0), converted to UCI and engine-validated by `convert-openings.js`. |
 
 ## Tests
