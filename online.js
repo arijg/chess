@@ -254,6 +254,19 @@
 
   /* ---------------- Lobby ---------------- */
 
+  function openSetup() {
+    // Reset any prior game/connection before starting a new one.
+    if (ws) { try { ws.close(); } catch (_) {} ws = null; }
+    if (clockTimer) clearInterval(clockTimer);
+    game = null; phase = 'lobby'; lastMove = null; selected = null;
+    $('share').hidden = true;
+    $('game-actions').hidden = true;
+    buildBoard();
+    renderBoard();
+    setStatus('', '');
+    $('setup').hidden = false;
+  }
+
   function startCreate() {
     settings.hostColor = $('host-color').value;
     settings.minutes = +$('host-time').value;
@@ -266,13 +279,16 @@
     } catch (_) { /* ignore */ }
     $('share-link').value = link;
     $('share').hidden = false;
-    $('create').disabled = true;
-    $('host-color').disabled = true;
-    $('host-time').disabled = true;
+    $('setup').hidden = true;
     connect(id);
   }
 
   $('create').addEventListener('click', startCreate);
+  $('new-online').addEventListener('click', openSetup);
+  $('setup-close').addEventListener('click', () => {
+    $('setup').hidden = true;
+    if (phase === 'lobby' && !ws) setStatus('Tap “New online game” to start.', '');
+  });
   $('copy').addEventListener('click', () => {
     const inp = $('share-link');
     inp.select();
@@ -595,6 +611,8 @@
     setStatus('Connecting…', '');
     connect(join);
   } else {
-    setStatus('Create a game and send the link to a friend.', '');
+    // Host: open the settings popup right away.
+    $('setup').hidden = false;
+    setStatus('Choose your colour and time, then create a game.', '');
   }
 })();
