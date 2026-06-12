@@ -47,6 +47,7 @@
     try {
       if (gameOver || !moveLog.length) { localStorage.removeItem(GAME_KEY); return; }
       localStorage.setItem(GAME_KEY, JSON.stringify({
+        fen: fullFen(states[0]),
         moves: moveLog.map(x => uciOfMove(x.m)),
         settings: {
           mode: settings.mode, human: settings.human, depth: settings.depth,
@@ -70,7 +71,8 @@
   function newGame(opts) {
     const handoff = opts && Array.isArray(opts.moves) ? opts : null; // also called from click handlers
     gen++;
-    states = [E.initialState()];
+    // Games can start from an arbitrary position (puzzle play-outs, restores).
+    states = [handoff && handoff.fen ? E.loadFEN(handoff.fen) : E.initialState()];
     moveLog = [];
     fenCounts = new Map([[E.fenKey(states[0]), 1]]);
     currentLegal = E.legalMoves(cur());
@@ -89,7 +91,10 @@
         fenCounts.set(key, (fenCounts.get(key) || 0) + 1);
         currentLegal = E.legalMoves(next);
       }
-      if (!handoff.restore) {
+      if (handoff.human) {
+        settings.human = handoff.human; // puzzle play-out: keep the solver's color
+        $('playas').value = settings.human;
+      } else if (!handoff.restore) {
         settings.human = cur().turn; // the player continues from the book position
         $('playas').value = settings.human;
       }
@@ -172,7 +177,7 @@
     const myGen = gen;
     const sf = SF_LEVELS[settings.depth];
     if (sf) {
-      Stockfish.go({ moves: moveLog.map(x => uciOfMove(x.m)) }, { elo: sf.elo, movetime: sf.movetime })
+      Stockfish.go({ fen: fullFen(states[0]), moves: moveLog.map(x => uciOfMove(x.m)) }, { elo: sf.elo, movetime: sf.movetime })
         .then(r => {
           if (myGen !== gen) return;
           aiThinking = false;
@@ -368,7 +373,7 @@
       }
       const before = clamp(analysis.evals[j]);
       const after = clamp(analysis.evals[j + 1]);
-      const drop = j % 2 === 0 ? before - after : after - before; // from the mover's view
+      const drop = states[j].turn === 'w' ? before - after : after - before; // from the mover's view
       analysis.anns[j] = drop >= 250 ? '??' : drop >= 120 ? '?' : drop >= 60 ? '?!' : null;
       if (analysis.anns[j] === '??' || analysis.anns[j] === '?') {
         const u = analysis.bestUci[j];
@@ -394,7 +399,7 @@
     const accs = { w: [], b: [] };
     const tally = { w: {}, b: {} };
     for (let j = 0; j < moveLog.length; j++) {
-      const mover = j % 2 === 0 ? 'w' : 'b';
+      const mover = states[j].turn;
       const before = winPct(analysis.evals[j]);
       const after = winPct(analysis.evals[j + 1]);
       const drop = Math.max(0, mover === 'w' ? before - after : after - before);
@@ -979,8 +984,7 @@
   function capturedBy(color) {
     const out = [];
     moveLog.forEach((e, i) => {
-      const mover = i % 2 === 0 ? 'w' : 'b';
-      if (mover === color && e.m.captured) out.push(e.m.captured);
+      if (states[i].turn === color && e.m.captured) out.push(e.m.captured);
     });
     return out.sort((a, b) => VALUES[E.typeOf(b)] - VALUES[E.typeOf(a)]);
   }
@@ -1070,7 +1074,7 @@
     if (!isLive()) {
       if (viewPly === 0) { el.textContent = 'Start position (→ to step forward)'; return; }
       const j = viewPly - 1;
-      let s = (Math.floor(j / 2) + 1) + (j % 2 === 0 ? '. ' : '… ') + moveLog[j].san;
+      let s = states[j].fullmove + (states[j].turn === 'w' ? '. ' : '… ') + moveLog[j].san;
       if (analysis && analysis.complete && analysis.anns[j]) {
         s += ' — ' + annLabel(analysis.anns[j]);
         if (analysis.best[j]) s += ' · better: ' + analysis.best[j];
@@ -1095,17 +1099,23 @@
     const el = $('moves');
     el.innerHTML = '';
     const viewedMoveIdx = isLive() ? moveLog.length - 1 : viewPly - 1;
-    for (let i = 0; i < moveLog.length; i += 2) {
+    // Games from an arbitrary position may start with Black to move; pad the
+    // first row and number rows from the base position's move counter.
+    const cells = states[0].turn === 'b' ? [-1] : [];
+    for (let j = 0; j < moveLog.length; j++) cells.push(j);
+    for (let i = 0; i < cells.length; i += 2) {
       const row = document.createElement('div');
       row.className = 'move-row';
       const num = document.createElement('span');
       num.className = 'move-num';
-      num.textContent = (i / 2 + 1) + '.';
+      num.textContent = (states[0].fullmove + i / 2) + '.';
       row.appendChild(num);
-      for (const j of [i, i + 1]) {
+      for (const j of [cells[i], cells[i + 1]]) {
         const s = document.createElement('span');
-        s.className = 'move-san' + (j === viewedMoveIdx ? ' current' : '');
-        if (moveLog[j]) {
+        s.className = 'move-san' + (j !== undefined && j >= 0 && j === viewedMoveIdx ? ' current' : '');
+        if (j === -1) {
+          s.textContent = '…';
+        } else if (j !== undefined && moveLog[j]) {
           const ann = analysis && analysis.complete ? analysis.anns[j] : null;
           s.textContent = moveLog[j].san + (ann || '');
           s.dataset.ply = j + 1;
@@ -1271,7 +1281,7 @@
         $('time').value = String(settings.minutes);
         $('autoqueen').value = settings.autoQueen ? '1' : '0';
         if (SF_LEVELS[settings.depth]) Stockfish.init().catch(() => {});
-        handoff = { moves: g.moves, restore: true, clocks: g.clocks };
+        handoff = { fen: g.fen, moves: g.moves, restore: true, clocks: g.clocks };
       }
     } catch (_) { /* start fresh */ }
   }

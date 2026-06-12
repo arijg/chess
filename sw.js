@@ -38,8 +38,18 @@ self.addEventListener('activate', e => {
 self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET' || !e.request.url.startsWith(self.location.origin)) return;
   e.respondWith(
-    caches.open(CACHE).then(cache =>
-      cache.match(e.request, { ignoreSearch: true }).then(cached => {
+    caches.open(CACHE).then(cache => {
+      // Pages: network-first so updates appear immediately; cache when offline.
+      if (e.request.mode === 'navigate') {
+        return fetch(e.request)
+          .then(resp => {
+            if (resp && resp.ok) cache.put(e.request, resp.clone());
+            return resp;
+          })
+          .catch(() => cache.match(e.request, { ignoreSearch: true }));
+      }
+      // Assets: stale-while-revalidate.
+      return cache.match(e.request, { ignoreSearch: true }).then(cached => {
         const refresh = fetch(e.request)
           .then(resp => {
             if (resp && resp.ok) cache.put(e.request, resp.clone());
@@ -47,7 +57,7 @@ self.addEventListener('fetch', e => {
           })
           .catch(() => cached);
         return cached || refresh;
-      })
-    )
+      });
+    })
   );
 });

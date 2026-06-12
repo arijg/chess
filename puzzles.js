@@ -85,6 +85,7 @@
     marks = {};
     promoEl.hidden = true;
     $('next').textContent = 'Skip →';
+    $('playout').hidden = true;
     buildBoard();
     renderBoard();
     renderPanel();
@@ -140,6 +141,8 @@
     }
     saveStore();
     $('next').textContent = 'Next Puzzle →';
+    // Offer to play the game out vs the engine when the position isn't over.
+    $('playout').hidden = !legal.length;
     renderPanel();
     const tags = puzzle.themes.length ? ' · ' + puzzle.themes.join(', ') : '';
     setFeedback((failed ? 'Solved — but with mistakes.' : 'Solved! +' + delta + ' rating')
@@ -501,6 +504,20 @@
     else endRush();
   });
   $('rush-exit').addEventListener('click', exitRush);
+  $('playout').addEventListener('click', () => {
+    if (!solved) return;
+    // Hand the final puzzle position to the game page; the solver keeps
+    // their color and the engine takes over the opponent.
+    try {
+      localStorage.setItem('chess-handoff', JSON.stringify({
+        fen: E.fenKey(st) + ' ' + st.halfmove + ' ' + st.fullmove,
+        moves: [],
+        human: solverColor,
+        t: Date.now(),
+      }));
+    } catch (_) { /* */ }
+    location.href = 'index.html';
+  });
 
   /* ---------------- Panel ---------------- */
 

@@ -76,9 +76,9 @@
       .then(init)
       .then(() => new Promise(resolve => {
         configure(opts);
-        worker.postMessage('position ' + (position.moves !== undefined
-          ? 'startpos' + (position.moves.length ? ' moves ' + position.moves.join(' ') : '')
-          : 'fen ' + position.fen));
+        const moves = position.moves && position.moves.length ? ' moves ' + position.moves.join(' ') : '';
+        worker.postMessage('position '
+          + (position.fen ? 'fen ' + position.fen : 'startpos') + moves);
         let score = null;
         const lines = []; // latest info per MultiPV slot
         listeners.push(line => {
