@@ -390,7 +390,7 @@ main {
 .nav a.active { background: var(--green); color: #fff; }
 .nav a:hover { filter: brightness(1.15); }
 
-.controls-full { grid-template-columns: 1fr; }
+.controls-full { grid-template-columns: minmax(0, 1fr); }
 
 .stats { display: flex; gap: 8px; }
 
@@ -451,7 +451,9 @@ main {
 
 .controls {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  /* minmax(0, …) lets the columns shrink below the selects' intrinsic
+     (longest-option) width instead of overflowing the panel. */
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 10px;
 }
 
@@ -472,6 +474,9 @@ main {
   padding: 7px 8px;
   font-size: 14px;
   outline: none;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 #status {
