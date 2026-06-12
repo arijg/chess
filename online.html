@@ -39,25 +39,7 @@
       </nav>
 
       <div id="lobby">
-        <div class="controls">
-          <label>Your colour
-            <select id="host-color">
-              <option value="w">White</option>
-              <option value="b">Black</option>
-              <option value="random" selected>Random</option>
-            </select>
-          </label>
-          <label>Time
-            <select id="host-time">
-              <option value="0">No clock</option>
-              <option value="3">3 min</option>
-              <option value="5">5 min</option>
-              <option value="10" selected>10 min</option>
-              <option value="30">30 min</option>
-            </select>
-          </label>
-        </div>
-        <button id="create" class="btn primary">Create game &amp; get link</button>
+        <button id="new-online" class="btn primary">New online game</button>
         <div id="share" hidden>
           <p class="share-label">Send this link to a friend:</p>
           <input id="share-link" type="text" readonly>
@@ -74,6 +56,34 @@
       </div>
     </aside>
   </main>
+
+  <div id="setup" class="modal" hidden>
+    <div class="modal-card">
+      <b>New online game</b>
+      <div class="controls controls-full">
+        <label>Your colour
+          <select id="host-color">
+            <option value="w">White</option>
+            <option value="b">Black</option>
+            <option value="random" selected>Random</option>
+          </select>
+        </label>
+        <label>Time
+          <select id="host-time">
+            <option value="0">No clock</option>
+            <option value="3">3 min</option>
+            <option value="5">5 min</option>
+            <option value="10" selected>10 min</option>
+            <option value="30">30 min</option>
+          </select>
+        </label>
+      </div>
+      <div class="go-actions">
+        <button id="create" class="btn primary">Create game &amp; get link</button>
+        <button id="setup-close" class="btn">Cancel</button>
+      </div>
+    </div>
+  </div>
 
   <script src="chess-engine.js"></script>
   <script src="online-core.js"></script>

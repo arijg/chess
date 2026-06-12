@@ -372,18 +372,19 @@ main {
 
 .square.mark-bad .piece { animation: shake .25s; }
 
-.nav { display: flex; gap: 8px; }
+.nav { display: flex; flex-wrap: wrap; gap: 6px; }
 
 .nav a {
-  flex: 1;
+  flex: 1 1 28%;
+  min-width: 0;
   text-align: center;
-  padding: 8px;
+  padding: 7px 6px;
   border-radius: 6px;
   background: var(--panel-2);
   color: var(--text);
   text-decoration: none;
   font-weight: 700;
-  font-size: 14px;
+  font-size: 13px;
 }
 
 .nav a.active { background: var(--green); color: #fff; }
@@ -714,6 +715,34 @@ main {
 /* ---------- Online page ---------- */
 
 #lobby { display: flex; flex-direction: column; gap: 12px; }
+
+.modal {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, .5);
+  padding: 16px;
+}
+
+.modal-card {
+  background: var(--panel);
+  border-radius: 12px;
+  padding: 22px;
+  width: min(360px, 92vw);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, .6);
+}
+
+.modal-card > b {
+  color: var(--text-bright);
+  font-size: 18px;
+  text-align: center;
+}
 
 #share {
   display: flex;
