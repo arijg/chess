@@ -117,10 +117,24 @@
         <button id="undo" class="btn">Undo</button>
         <button id="hint" class="btn">Hint</button>
         <button id="resign" class="btn">Resign</button>
+        <button id="pgn-btn" class="btn">PGN</button>
         <button id="analyze" class="btn" hidden>Analyze</button>
       </div>
     </aside>
   </main>
+
+  <div id="pgn" hidden>
+    <div id="pgn-card">
+      <b>PGN — copy this game, or paste one to load</b>
+      <textarea id="pgn-text" spellcheck="false"></textarea>
+      <span id="pgn-note">Loading a PGN replaces the current game. Finished games can be analyzed right away.</span>
+      <div class="go-actions">
+        <button id="pgn-copy" class="btn primary">Copy</button>
+        <button id="pgn-load" class="btn">Load PGN</button>
+        <button id="pgn-close" class="btn">Close</button>
+      </div>
+    </div>
+  </div>
 
   <script src="chess-engine.js?v=2"></script>
   <script src="stockfish-engine.js"></script>
