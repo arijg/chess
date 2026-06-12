@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Play Chess Online</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#312e2b">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+</head>
+<body>
+  <main>
+    <section class="board-col">
+      <div class="player-bar">
+        <span class="p-name" id="name-top"></span>
+        <span class="clock" id="clock-top"></span>
+      </div>
+      <div id="board-wrap">
+        <div id="board"></div>
+        <div id="promo" hidden>
+          <div id="promo-box"></div>
+        </div>
+      </div>
+      <div class="player-bar">
+        <span class="p-name" id="name-bottom"></span>
+        <span class="clock" id="clock-bottom"></span>
+      </div>
+    </section>
+
+    <aside class="panel">
+      <h1>Play Online</h1>
+      <nav class="nav">
+        <a href="index.html">Play</a>
+        <a href="puzzles.html">Puzzles</a>
+        <a href="openings.html">Openings</a>
+        <a href="endgames.html">Endgames</a>
+        <a class="active" href="online.html">Online</a>
+      </nav>
+
+      <div id="lobby">
+        <div class="controls">
+          <label>Your colour
+            <select id="host-color">
+              <option value="w">White</option>
+              <option value="b">Black</option>
+              <option value="random" selected>Random</option>
+            </select>
+          </label>
+          <label>Time
+            <select id="host-time">
+              <option value="0">No clock</option>
+              <option value="3">3 min</option>
+              <option value="5">5 min</option>
+              <option value="10" selected>10 min</option>
+              <option value="30">30 min</option>
+            </select>
+          </label>
+        </div>
+        <button id="create" class="btn primary">Create game &amp; get link</button>
+        <div id="share" hidden>
+          <p class="share-label">Send this link to a friend:</p>
+          <input id="share-link" type="text" readonly>
+          <button id="copy" class="btn">Copy link</button>
+        </div>
+      </div>
+
+      <div id="status"></div>
+      <div id="moves"></div>
+      <div class="actions" id="game-actions" hidden>
+        <button id="resign" class="btn">Resign</button>
+        <button id="draw" class="btn">Offer draw</button>
+        <button id="rematch" class="btn primary" hidden>Rematch</button>
+      </div>
+    </aside>
+  </main>
+
+  <script src="chess-engine.js"></script>
+  <script src="online-core.js"></script>
+  <script src="online.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
+  </script>
+</body>
+</html>

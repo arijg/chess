@@ -23,6 +23,8 @@ const FILES = [
   'test-openings.js',
   'endgames-data.js',
   'test-endgames.js',
+  'online-core.js',
+  'test-online.js',
 ];
 
 for (const f of FILES) {

@@ -7,10 +7,10 @@ const CACHE = 'chess-v2';
 
 const PRECACHE = [
   './',
-  'index.html', 'puzzles.html', 'openings.html', 'endgames.html',
+  'index.html', 'puzzles.html', 'openings.html', 'endgames.html', 'online.html',
   'style.css',
   'chess-engine.js', 'app.js', 'puzzles.js', 'openings.js', 'endgames.js',
-  'stockfish-engine.js',
+  'stockfish-engine.js', 'online.js', 'online-core.js',
   'puzzles-data.js', 'openings-data.js', 'endgames-data.js',
   'vendor/stockfish/stockfish-18-lite-single.js',
   'vendor/stockfish/stockfish-18-lite-single.wasm',

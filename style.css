@@ -711,6 +711,33 @@ main {
 #status.good { color: var(--green); }
 #status.bad { color: #fa412d; }
 
+/* ---------- Online page ---------- */
+
+#lobby { display: flex; flex-direction: column; gap: 12px; }
+
+#share {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: var(--panel-2);
+  border-radius: 6px;
+  padding: 12px;
+}
+
+.share-label { margin: 0; font-size: 13px; color: #989795; }
+
+#share-link {
+  width: 100%;
+  box-sizing: border-box;
+  background: #1f1e1b;
+  color: var(--text-bright);
+  border: 1px solid #3d3b38;
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 13px;
+  outline: none;
+}
+
 /* ---------- PGN dialog ---------- */
 
 #pgn {
