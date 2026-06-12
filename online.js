@@ -15,7 +15,7 @@
   //      server/cloudflare (see server/cloudflare/README.md)
   //   3. ws://localhost:8421 when developing locally
   const PLACEHOLDER = 'wss://YOUR-RELAY-HOST';
-  const PROD_RELAY = PLACEHOLDER; // <-- replace with wss://chess-relay.<you>.workers.dev
+  const PROD_RELAY = 'wss://chess.ariel-5fb.workers.dev'; // Cloudflare Worker relay
   function resolveRelay() {
     try {
       const q = new URLSearchParams(location.search).get('relay');
