@@ -41,6 +41,23 @@
   let clocks = null, clockTimer = null, lastTick = 0;
   let squareEls = [];
 
+  // The game in progress survives reloads; finished games are not kept.
+  const GAME_KEY = 'chess-game-v1';
+  function saveGame() {
+    try {
+      if (gameOver || !moveLog.length) { localStorage.removeItem(GAME_KEY); return; }
+      localStorage.setItem(GAME_KEY, JSON.stringify({
+        moves: moveLog.map(x => uciOfMove(x.m)),
+        settings: {
+          mode: settings.mode, human: settings.human, depth: settings.depth,
+          minutes: settings.minutes, autoQueen: settings.autoQueen,
+        },
+        clocks,
+        t: Date.now(),
+      }));
+    } catch (_) { /* private mode */ }
+  }
+
   const cur = () => states[states.length - 1];
   const isLive = () => viewPly === null;
   const viewState = () => isLive() ? cur() : states[viewPly];
@@ -72,8 +89,10 @@
         fenCounts.set(key, (fenCounts.get(key) || 0) + 1);
         currentLegal = E.legalMoves(next);
       }
-      settings.human = cur().turn; // the player continues from the book position
-      $('playas').value = settings.human;
+      if (!handoff.restore) {
+        settings.human = cur().turn; // the player continues from the book position
+        $('playas').value = settings.human;
+      }
     }
     flipped = settings.mode === 'ai' && settings.human === 'b';
     promoEl.hidden = true;
@@ -83,6 +102,7 @@
     clocks = settings.minutes > 0
       ? { w: settings.minutes * 60000, b: settings.minutes * 60000 }
       : null;
+    if (handoff && handoff.restore && handoff.clocks && clocks) clocks = handoff.clocks;
     if (clockTimer) clearInterval(clockTimer);
     if (clocks) {
       lastTick = performance.now();
@@ -93,6 +113,7 @@
     renderAll();
     updateEval();
     updateLines();
+    saveGame();
     if (isAITurn()) scheduleAI();
   }
 
@@ -135,6 +156,7 @@
 
     renderAll();
     updateEval();
+    saveGame();
     if (animate && isLive()) animateMove(m, false);
     if (gameOver) { showGameOver(); return; }
     if (isAITurn()) scheduleAI();
@@ -207,6 +229,7 @@
     renderAll();
     updateEval();
     updateLines();
+    saveGame();
     if (isAITurn()) scheduleAI();
   }
 
@@ -1165,6 +1188,7 @@
     sound('end');
     renderAll();
     updateEval();
+    saveGame();
     showGameOver();
   });
   $('hint').addEventListener('click', () => {
@@ -1198,6 +1222,23 @@
     $('playas-wrap').hidden = false;
     $('diff-wrap').hidden = false;
     Stockfish.init().catch(() => {});
+  } else {
+    // Resume an unfinished game from a previous visit.
+    try {
+      const g = JSON.parse(localStorage.getItem(GAME_KEY) || 'null');
+      if (g && Array.isArray(g.moves) && g.moves.length) {
+        Object.assign(settings, g.settings || {});
+        $('mode').value = settings.mode;
+        $('playas-wrap').hidden = settings.mode !== 'ai';
+        $('diff-wrap').hidden = settings.mode !== 'ai';
+        $('playas').value = settings.human;
+        $('diff').value = String(settings.depth);
+        $('time').value = String(settings.minutes);
+        $('autoqueen').value = settings.autoQueen ? '1' : '0';
+        if (SF_LEVELS[settings.depth]) Stockfish.init().catch(() => {});
+        handoff = { moves: g.moves, restore: true, clocks: g.clocks };
+      }
+    } catch (_) { /* start fresh */ }
   }
   newGame(handoff);
 })();
