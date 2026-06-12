@@ -5,6 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Chess Endgames</title>
   <link rel="stylesheet" href="style.css">
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#312e2b">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
 </head>
 <body>
   <main>
@@ -39,5 +42,8 @@
   <script src="chess-engine.js"></script>
   <script src="stockfish-engine.js"></script>
   <script src="endgames.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
+  </script>
 </body>
 </html>
