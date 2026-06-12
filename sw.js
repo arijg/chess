@@ -11,7 +11,7 @@ const PRECACHE = [
   'style.css',
   'chess-engine.js', 'app.js', 'puzzles.js', 'openings.js', 'endgames.js',
   'stockfish-engine.js',
-  'puzzles-data.js', 'openings-data.js',
+  'puzzles-data.js', 'openings-data.js', 'endgames-data.js',
   'vendor/stockfish/stockfish-18-lite-single.js',
   'vendor/stockfish/stockfish-18-lite-single.wasm',
   'pieces/wK.svg', 'pieces/wQ.svg', 'pieces/wR.svg', 'pieces/wB.svg', 'pieces/wN.svg', 'pieces/wP.svg',
