@@ -380,13 +380,48 @@
     analysis.complete = true;
     renderMoves();
     renderGraph();
+    renderReport();
     renderStatus();
     updateLines();
   }
 
+  // Per-player accuracy (win-probability based) and move-quality tallies.
+  function renderReport() {
+    const el = $('acc-report');
+    if (!analysis || !analysis.complete || !moveLog.length) { el.hidden = true; return; }
+    const clamp = v => Math.max(-1500, Math.min(1500, v));
+    const winPct = cp => 50 + 50 * (2 / (1 + Math.exp(-0.00368208 * clamp(cp))) - 1);
+    const accs = { w: [], b: [] };
+    const tally = { w: {}, b: {} };
+    for (let j = 0; j < moveLog.length; j++) {
+      const mover = j % 2 === 0 ? 'w' : 'b';
+      const before = winPct(analysis.evals[j]);
+      const after = winPct(analysis.evals[j + 1]);
+      const drop = Math.max(0, mover === 'w' ? before - after : after - before);
+      accs[mover].push(Math.max(0, Math.min(100, 103.1668 * Math.exp(-0.04354 * drop) - 3.1669)));
+      const ann = analysis.anns[j];
+      if (ann) tally[mover][ann] = (tally[mover][ann] || 0) + 1;
+    }
+    const avg = a => a.length ? (a.reduce((s, x) => s + x, 0) / a.length).toFixed(1) : '—';
+    const ROWS = [
+      ['★', 'Best', 'ann-best'], ['!', 'Great', 'ann-great'], ['?!', 'Inaccuracy', 'ann-inacc'],
+      ['?', 'Mistake', 'ann-mistake'], ['??', 'Blunder', 'ann-blunder'],
+    ];
+    let html = '<div class="acc-row acc-head"><span>' + avg(accs.w) + '%</span><span>Accuracy</span><span>'
+      + avg(accs.b) + '%</span></div>';
+    for (const [sym, name, cls] of ROWS) {
+      const w = tally.w[sym] || 0, b = tally.b[sym] || 0;
+      if (!w && !b) continue;
+      html += '<div class="acc-row"><span>' + w + '</span><span class="' + cls + '">' + sym + ' ' + name
+        + '</span><span>' + b + '</span></div>';
+    }
+    el.innerHTML = html;
+    el.hidden = false;
+  }
+
   function renderGraph() {
     const wrap = $('eval-graph-wrap');
-    if (!analysis) { wrap.hidden = true; return; }
+    if (!analysis) { wrap.hidden = true; $('acc-report').hidden = true; return; }
     wrap.hidden = false;
     const W = 300, H = 64, n = states.length;
     const clamp = v => Math.max(-600, Math.min(600, v));
