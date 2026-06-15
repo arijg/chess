@@ -879,6 +879,21 @@ main {
 
 .btn.primary:hover { background: var(--green-hover); }
 
+/* Undo gets a distinct amber accent + icon so it stands out from the row of
+   identical dark action buttons — easy to spot at a glance, especially on
+   mobile where dark-on-dark buttons are hard to tell apart. */
+#undo {
+  background: #c2872e;
+  box-shadow: 0 3px 0 #8a6020;
+}
+
+#undo:active { box-shadow: 0 1px 0 #8a6020; }
+
+#undo::before {
+  content: '↩';
+  margin-right: 5px;
+}
+
 @media (max-width: 1020px) {
   .panel { width: min(674px, 94vw); max-height: none; }
   #moves { max-height: 200px; }
